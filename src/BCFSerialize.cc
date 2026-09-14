@@ -70,9 +70,12 @@ void bcf_raw_write_to_mem(bcf1_t *v, int reclen, uint8_t *addr) {
     assert(sizeof(x) == 32);
     x[0] = v->shared.l + 24; // to include six 32-bit integers
     x[1] = v->indiv.l;
-    memcpy(x + 2, v, 16);
+    x[2] = v->rid;
+    x[3] = (uint32_t)v->pos;
+    x[4] = (uint32_t)v->rlen;
+    memcpy(&x[5], &v->qual, 4);
     x[6] = (uint32_t)v->n_allele<<16 | v->n_info;
-    x[7] = (uint32_t)v->n_fmt<<24 | v->n_sample;
+    x[7] = (uint32_t)v->n_fmt<<24 | (v->n_sample & 0xffffff);
      memcpy(&addr[loc], (char*)x, sizeof(x));
     loc += sizeof(x);
     memcpy(&addr[loc], v->shared.s, v->shared.l);
@@ -108,9 +111,13 @@ Status bcf_raw_read_from_mem(const uint8_t *buf, int start, size_t len, bcf1_t *
     x[0] -= 24; // to exclude six 32-bit integers
 
     BOUNDS_CHECK(start + loc + x[0] + x[1], len, "reading BCF record");
-    ks_resize(&v->shared, x[0]);
-    ks_resize(&v->indiv, x[1]);
-    memcpy(v, (char*)&x[2], 16);
+    ks_resize(&v->shared, x[0] ? x[0] : 1);
+    ks_resize(&v->indiv, x[1] ? x[1] : 1);
+    v->rid = (int32_t)x[2];
+    v->pos = (uint32_t)x[3];
+    if (v->pos == UINT32_MAX) v->pos = -1;
+    v->rlen = (int32_t)x[4];
+    memcpy(&v->qual, &x[5], 4);
     v->n_allele = x[6]>>16; v->n_info = x[6]&0xffff;
     v->n_fmt = x[7]>>24; v->n_sample = x[7]&0xffffff;
     v->shared.l = x[0], v->indiv.l = x[1];
@@ -205,9 +212,12 @@ Status bcf_raw_read_header(const uint8_t* buf, int hdrlen,
 }
 
 std::string bcf_write_header(const bcf_hdr_t *hdr) {
-    int hlen;
-    char *htxt = bcf_hdr_fmt_text(hdr, 1, &hlen);
-    hlen++; // include the \0 byte
+    kstring_t str = {0, 0, nullptr};
+    if (bcf_hdr_format(hdr, 1, &str) < 0) {
+        free(str.s);
+        return "";
+    }
+    int hlen = str.l + 1; // include the \0 byte
 
     char *buf = (char*) malloc(5 + 4 + hlen);
     assert(buf != nullptr);
@@ -216,12 +226,12 @@ std::string bcf_write_header(const bcf_hdr_t *hdr) {
     loc += 5;
     memcpy(&buf[loc], &hlen, 4);
     loc += 4;
-    memcpy(&buf[loc], htxt, hlen);
+    memcpy(&buf[loc], str.s, hlen);
     loc += hlen;
 
     // cleanup and return
     string rc(buf, loc);
-    free(htxt);
+    free(str.s);
     free(buf);
     return rc;
 }

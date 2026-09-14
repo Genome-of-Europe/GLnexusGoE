@@ -8,6 +8,7 @@
 
 #include <vcf.h>
 #include <hfile.h>
+#include <htslib/bgzf.h>
 
 #include "BCFSerialize.h"
 #include "catch.hpp"
@@ -145,7 +146,7 @@ TEST_CASE("htslib VCF header chrom injection") {
 
     // inject
     bcf_hdr_append(hdr,"##contig=<ID=21,length=1000000>");
-    bcf_hdr_sync(hdr);
+    REQUIRE(bcf_hdr_sync(hdr) == 0);
 
     // read another record - we shouldn't get the error code
     vt->errcode = 0;
@@ -165,7 +166,7 @@ TEST_CASE("htslib VCF header synthesis") {
     REQUIRE(bcf_hdr_add_sample(hdr.get(),"mo") == 0);
     REQUIRE(bcf_hdr_add_sample(hdr.get(),"ch") == 0);
 
-    bcf_hdr_sync(hdr.get());
+    REQUIRE(bcf_hdr_sync(hdr.get()) == 0);
 
     int ncontigs = 0;
     const char **contignames = bcf_hdr_seqnames(hdr.get(), &ncontigs);
@@ -201,7 +202,7 @@ TEST_CASE("DNAnexus VCF/BCF serialization") {
     vector<shared_ptr<bcf1_t>> records;
 
     bcf_hdr_append(hdr,"##contig=<ID=21,length=1000000>");
-    bcf_hdr_sync(hdr);
+    REQUIRE(bcf_hdr_sync(hdr) == 0);
 
     do {
         if (vt) {
@@ -337,17 +338,12 @@ TEST_CASE("Ensure uncompressed BCF encoding remains consistent") {
         bcf_hdr_append(hdr.get(), "##FORMAT=<ID=UF,Number=1,Type=Integer,Description=\"Unused FORMAT\">");
         bcf_hdr_add_sample(hdr.get(), "NA00001");
         bcf_hdr_add_sample(hdr.get(), NULL);      // to update internal structures
-        bcf_hdr_write(fp, hdr.get());
-
-        REQUIRE(hts_get_format(fp)->compression == no_compression);
-        //REQUIRE(hts_get_format(fp)->format == bcf);
-        // force BCF format; not sure why this doesn't just work. Opening
-        // the file in 'wbu' mode is supposed to
-        fp->format.format = bcf;
+        fp->fp.bgzf->is_compressed = 0;
+        REQUIRE(bcf_hdr_write(fp, hdr.get()) == 0);
 
         // write to the file
         for (const auto& rec : records) {
-            bcf_write1(fp, hdr.get(), rec.get());
+            REQUIRE(bcf_write1(fp, hdr.get(), rec.get()) == 0);
         }
 
         // note: the file is now closed, we can read it in the next phase.

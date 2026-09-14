@@ -61,10 +61,10 @@ endif()
 # After build, double-check external/src/htslib-stamp/htslib-build-out.log
 # to make sure CFLAGS were set as expected
 ExternalProject_Add(htslib
-    URL https://github.com/samtools/htslib/releases/download/1.9/htslib-1.9.tar.bz2
+    URL https://github.com/samtools/htslib/releases/download/1.24/htslib-1.24.tar.bz2
     PREFIX ${CMAKE_CURRENT_BINARY_DIR}/external
     CONFIGURE_COMMAND ""
-    PATCH_COMMAND sed -i.bak "s|^CFLAGS .*$|CFLAGS = -gdwarf -O3 -DNDEBUG ${ARCH_FLAGS} ${HTSLIB_EXTRA_CFLAGS}|" Makefile
+    PATCH_COMMAND sed -i.bak -e "s|^CFLAGS .*$|CFLAGS = -gdwarf -O3 -DNDEBUG ${ARCH_FLAGS} ${HTSLIB_EXTRA_CFLAGS}|" -e "s|^NONCONFIGURE_OBJS =.*$|NONCONFIGURE_OBJS =|" -e "s|echo '#define HAVE_LIBCURL 1' >> \\$@||" Makefile
     BUILD_IN_SOURCE 1
     BUILD_COMMAND bash -c "make -n libhts.a && make -j$(nproc) libhts.a"
     INSTALL_COMMAND ""

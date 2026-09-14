@@ -73,3 +73,30 @@ Summary of changes made to compile GLnexus and pass unit tests natively on macOS
 * **Python PyVCF (`pyvcf3`)**:
   * Installed `pyvcf3` into Python environment for `test/testOutputVcf.py`.
   * *Rationale*: Unit tests invoke `testOutputVcf.py` to semantically compare generated VCF outputs against truth files.
+
+---
+
+## 5. Upgrade htslib to 1.24
+
+* **Build System (`CMakeLists.txt`)**:
+  * Upgraded htslib `URL` from `1.9` to `1.24` release tarball.
+  * Updated `PATCH_COMMAND` with `-e` expressions to patch `CFLAGS`, clear `NONCONFIGURE_OBJS`, and remove `echo '#define HAVE_LIBCURL 1' >> $@`.
+  * *Rationale*: Avoids linking against libcurl (keeps static library self-contained) and resolves undefined `_hfile_plugin_init_libcurl` symbols on macOS / Linux builder.
+
+* **Core Source Code (`src/BCFSerialize.cc`)**:
+  * Replaced direct 16-byte `memcpy` into / out of `bcf1_t` with explicit field serialization (`rid`, `pos`, `rlen`, `qual`).
+  * *Rationale*: In htslib >= 1.10, `pos` and `rlen` are 64-bit (`hts_pos_t`) and struct field ordering changed to `pos, rlen, rid, qual`. Raw `memcpy` corrupted record fields and wire format.
+  * Replaced deprecated `bcf_hdr_fmt_text` with `bcf_hdr_format` using `kstring_t`.
+  * *Rationale*: `bcf_hdr_fmt_text` is deprecated in htslib 1.24.
+
+* **Unit Tests & Test Data**:
+  * **[test/htslib_behaviors.cc](file:///Users/vinter/projects/GLnexus/test/htslib_behaviors.cc)**:
+    * Wrapped `bcf_hdr_sync`, `bcf_hdr_write`, and `bcf_write1` calls in `REQUIRE(... == 0)` to satisfy `-Werror=unused-result`.
+    * Included `<htslib/bgzf.h>` and set `fp->fp.bgzf->is_compressed = 0` for raw uncompressed BCF byte-comparison test.
+  * **[test/BCFKeyValueData.cc](file:///Users/vinter/projects/GLnexus/test/BCFKeyValueData.cc)**:
+    * Used `std::max<hts_pos_t>` to fix template argument deduction against 64-bit `pos`.
+  * **Test Data (`test/data/*.gvcf`, `test/data/mt/*.gvcf`)**:
+    * Replaced spaces before `QUAL` in `#CHROM` line (`\t  QUAL` -> `\tQUAL`) in 14 test gVCF files. Modern htslib strictly enforces tab-separated headers.
+    * Corrected REF string length in two synthetic gVCF test records (`ACACGGTTAA` -> `ACACGGTTA` for 9 bp interval, `ATAT` -> `ATA` for 3 bp interval). Modern htslib enforces `rlen >= strlen(REF)`.
+  * **YAML Test Cases (`test/data/gvcf_test_cases/*.yml`)**:
+    * Fixed unclosed `##FILTER=<ID=LowQual...>` and truncated `##FORMAT=<ID=AD...>` header lines across 5 test specification YAML files to prevent htslib `Incomplete header line` warnings.

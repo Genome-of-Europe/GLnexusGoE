@@ -9,7 +9,7 @@ input:
     ##fileformat=VCFv4.2
     ##FILTER=<ID=PASS,Description="All filters passed">
     ##FILTER=<ID=RefCall,Description="Genotyping model thinks this site is reference.">
-    ##FILTER=<ID=LowQual,Description="Confidence in this variant being real is below calling threshold."
+    ##FILTER=<ID=LowQual,Description="Confidence in this variant being real is below calling threshold.">
     ##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
     ##FORMAT=<ID=GQ,Number=1,Type=Integer,Description="Genotype Quality">
     ##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Read depth of all passing filters reads.">
