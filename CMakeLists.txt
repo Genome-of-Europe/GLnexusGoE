@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.2)
+cmake_minimum_required(VERSION 3.5)
 include(ExternalProject)
 
 IF(NOT CMAKE_BUILD_TYPE)
@@ -39,22 +39,41 @@ LINK_DIRECTORIES(${CMAKE_BINARY_DIR}/external/lib)
 SET(ENV{PATH} ${CMAKE_BINARY_DIR}/external/bin:$ENV{PATH})
 SET(ENV{PKG_CONFIG_PATH} ${CMAKE_BINARY_DIR}/external/lib/pkgconfig)
 
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
+  set(ARCH_FLAGS "-march=ivybridge")
+  set(ROCKSDB_ARCH_OPT "-march=ivybridge -msse4.2 -DHAVE_SSE42 -mpclmul")
+else()
+  set(ARCH_FLAGS "")
+  set(ROCKSDB_ARCH_OPT "")
+endif()
+
+if(APPLE)
+  link_directories(/opt/homebrew/lib)
+  set(HTSLIB_EXTRA_CFLAGS "-I/opt/homebrew/opt/xz/include")
+  set(ROCKSDB_EXTRA_CXXFLAGS "-I/opt/homebrew/include")
+  set(ROCKSDB_EXTRA_LDFLAGS "-L/opt/homebrew/lib")
+else()
+  set(HTSLIB_EXTRA_CFLAGS "")
+  set(ROCKSDB_EXTRA_CXXFLAGS "")
+  set(ROCKSDB_EXTRA_LDFLAGS "")
+endif()
+
 # After build, double-check external/src/htslib-stamp/htslib-build-out.log
 # to make sure CFLAGS were set as expected
 ExternalProject_Add(htslib
     URL https://github.com/samtools/htslib/releases/download/1.9/htslib-1.9.tar.bz2
     PREFIX ${CMAKE_CURRENT_BINARY_DIR}/external
     CONFIGURE_COMMAND ""
-    PATCH_COMMAND sed -i "s/^CFLAGS .*$/CFLAGS = -gdwarf -O3 -DNDEBUG -march=ivybridge/" Makefile
+    PATCH_COMMAND sed -i.bak "s|^CFLAGS .*$|CFLAGS = -gdwarf -O3 -DNDEBUG ${ARCH_FLAGS} ${HTSLIB_EXTRA_CFLAGS}|" Makefile
     BUILD_IN_SOURCE 1
-    BUILD_COMMAND bash -c "make -n && make -j$(nproc)"
+    BUILD_COMMAND bash -c "make -n libhts.a && make -j$(nproc) libhts.a"
     INSTALL_COMMAND ""
     LOG_DOWNLOAD ON
     LOG_BUILD ON
   )
 ExternalProject_Get_Property(htslib source_dir)
-set(HTSLIB_INCLUDE_DIR ${source_dir}/htslib)
-include_directories(${HTSLIB_INCLUDE_DIR})
+set(HTSLIB_INCLUDE_DIR ${source_dir}/htslib ${source_dir})
+include_directories(BEFORE ${HTSLIB_INCLUDE_DIR})
 ExternalProject_Get_Property(htslib binary_dir)
 add_library(libhts STATIC IMPORTED)
 set(LIBHTS_A ${binary_dir}/libhts.a)
@@ -88,16 +107,14 @@ ExternalProject_Add(rocksdb
     PREFIX ${CMAKE_CURRENT_BINARY_DIR}/external
     CONFIGURE_COMMAND ""
     BUILD_IN_SOURCE 1
-    BUILD_COMMAND bash -c "export PORTABLE=1 && export DISABLE_JEMALLOC=1 && export OPT='-DNDEBUG -O3 -march=ivybridge -msse4.2 -DHAVE_SSE42 -mpclmul -DROCKSDB_NO_DYNAMIC_EXTENSION' && make -n static_lib && make -j$(nproc) static_lib"
+    BUILD_COMMAND bash -c "export PORTABLE=1 && export DISABLE_JEMALLOC=1 && export OPT='-DNDEBUG -O3 ${ROCKSDB_ARCH_OPT} -DROCKSDB_NO_DYNAMIC_EXTENSION' && export EXTRA_CXXFLAGS='-Wno-error ${ROCKSDB_EXTRA_CXXFLAGS}' && export EXTRA_LDFLAGS='${ROCKSDB_EXTRA_LDFLAGS}' && make -n static_lib && make -j$(nproc) static_lib"
     INSTALL_COMMAND ""
     LOG_DOWNLOAD ON
     LOG_BUILD ON
   )
 ExternalProject_Get_Property(rocksdb source_dir)
-set(ROCKSDB_INCLUDE_DIR ${source_dir}/include)
+set(ROCKSDB_INCLUDE_DIR ${source_dir}/include ${source_dir})
 include_directories(${ROCKSDB_INCLUDE_DIR})
-set(ROCKSDB_UTIL_DIR ${source_dir}/util)
-include_directories(${ROCKSDB_UTIL_DIR})
 ExternalProject_Get_Property(rocksdb binary_dir)
 add_library(librocksdb STATIC IMPORTED)
 set(LIBROCKSDB_A ${binary_dir}/librocksdb.a)
@@ -108,7 +125,7 @@ set_property(TARGET librocksdb PROPERTY IMPORTED_LOCATION ${LIBROCKSDB_A})
 ExternalProject_Add(yaml-cpp
     URL https://github.com/jbeder/yaml-cpp/archive/yaml-cpp-0.6.3.zip
     PREFIX ${CMAKE_CURRENT_BINARY_DIR}/external
-    CONFIGURE_COMMAND cmake -DYAML_CPP_BUILD_TOOLS=OFF -DYAML_CPP_BUILD_CONTRIB=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS=-march=ivybridge .
+    CONFIGURE_COMMAND cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DYAML_CPP_BUILD_TESTS=OFF -DYAML_CPP_BUILD_TOOLS=OFF -DYAML_CPP_BUILD_CONTRIB=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS=${ARCH_FLAGS} .
     BUILD_IN_SOURCE 1
     BUILD_COMMAND bash -c "make -j$(nproc)"
     INSTALL_COMMAND ""
@@ -137,7 +154,7 @@ set(CTPL_INCLUDE_DIR ${source_dir})
 include_directories(${CTPL_INCLUDE_DIR})
 
 ExternalProject_Add(fcmm
-    URL https://github.com/giacomodrago/fcmm/archive/v1.0.1.zip
+    URL https://github.com/sigiesec/fcmm/archive/v1.0.1.zip
     PREFIX ${CMAKE_CURRENT_BINARY_DIR}/external
     CONFIGURE_COMMAND ""
     BUILD_IN_SOURCE 1
@@ -167,14 +184,14 @@ ExternalProject_Add(capnp
     PREFIX ${CMAKE_CURRENT_BINARY_DIR}/external
     CONFIGURE_COMMAND ./configure --prefix=${CMAKE_BINARY_DIR}/external
     BUILD_IN_SOURCE 1
-    BUILD_COMMAND bash -c "make -j$(nproc) check"
+    BUILD_COMMAND bash -c "make -j$(nproc)"
     INSTALL_COMMAND make install
     LOG_DOWNLOAD ON
   )
 
 execute_process(COMMAND git describe --tags --long --dirty --always
                 OUTPUT_VARIABLE GIT_REVISION OUTPUT_STRIP_TRAILING_WHITESPACE)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DGIT_REVISION=\"\\\"${GIT_REVISION}\\\"\" -pthread -std=c++14 -Wall -Werror=return-type -Werror=unused-result -Wno-sign-compare -Wno-write-strings -Wno-terminate -fdiagnostics-color=auto -march=ivybridge")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DGIT_REVISION=\"\\\"${GIT_REVISION}\\\"\" -pthread -std=c++14 -Wall -Werror=return-type -Werror=unused-result -Wno-sign-compare -Wno-write-strings -Wno-terminate -Wno-return-type-c-linkage -fdiagnostics-color=auto ${ARCH_FLAGS}")
 set(CMAKE_CXX_FLAGS_RELEASE "-gdwarf -DNDEBUG -O3")
 
 ################################
@@ -222,11 +239,17 @@ add_dependencies(glnexus spdlog)
 add_dependencies(glnexus capnp)
 add_library(libglnexus ALIAS glnexus)
 
-set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -march=ivybridge -static-libstdc++ -pthread")
+if(APPLE)
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -pthread -Wl,-U,_mallctl")
+  set(GLNEXUS_DEPS glnexus libhts librocksdb libyaml-cpp z snappy bz2 zstd lzma lz4 libcapnp.a libkj.a)
+else()
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${ARCH_FLAGS} -static-libstdc++ -pthread")
+  set(GLNEXUS_DEPS glnexus libhts librocksdb libyaml-cpp libz.a libsnappy.a libbz2.a libzstd.a liblzma.a librt.a libcapnp.a libkj.a)
+endif()
 
 add_executable(glnexus_cli cli/glnexus_cli.cc)
 add_dependencies(glnexus_cli libglnexus)
-target_link_libraries(glnexus_cli glnexus libhts librocksdb libyaml-cpp libz.a libsnappy.a libbz2.a libzstd.a liblzma.a librt.a libcapnp.a libkj.a)
+target_link_libraries(glnexus_cli ${GLNEXUS_DEPS})
 
 install(TARGETS glnexus_cli DESTINATION bin)
 
@@ -238,6 +261,7 @@ ExternalProject_Add(catch
   URL https://github.com/philsquared/Catch/archive/v1.12.2.zip
   PREFIX ${CMAKE_CURRENT_BINARY_DIR}/external
   CONFIGURE_COMMAND ""
+  PATCH_COMMAND sed -i.bak "s|__asm__(\"int \\$3\\\\n\" : : /\\* NOLINT \\*/ )|__builtin_debugtrap()|" single_include/catch.hpp
   BUILD_COMMAND ""
   INSTALL_COMMAND ""
   LOG_DOWNLOAD ON
@@ -262,9 +286,11 @@ add_executable(unit_tests
                 test/cli.cc)
 add_dependencies(unit_tests catch)
 add_dependencies(unit_tests libglnexus)
-target_link_libraries(unit_tests glnexus libhts librocksdb libyaml-cpp libz.a libsnappy.a libbz2.a libzstd.a liblzma.a librt.a libcapnp.a libkj.a)
+target_link_libraries(unit_tests ${GLNEXUS_DEPS})
 
 include(CTest)
 add_test(NAME unit_tests COMMAND ./unit_tests -d yes)
-add_test(NAME jemalloc_warning COMMAND test/jemalloc_linking.sh)
-add_test(NAME getting_started COMMAND test/getting_started.sh)
+if(NOT APPLE)
+  add_test(NAME jemalloc_warning COMMAND test/jemalloc_linking.sh)
+  add_test(NAME getting_started COMMAND test/getting_started.sh)
+endif()

@@ -6,6 +6,17 @@
 #include "KeyValue.h"
 #include "BCFSerialize.h"
 #include "BCF_utils.h"
+#if defined(__APPLE__)
+#include <libkern/OSByteOrder.h>
+#define htobe16(x) OSSwapHostToBigInt16(x)
+#define be16toh(x) OSSwapBigToHostInt16(x)
+#define htobe32(x) OSSwapHostToBigInt32(x)
+#define be32toh(x) OSSwapBigToHostInt32(x)
+#define htobe64(x) OSSwapHostToBigInt64(x)
+#define be64toh(x) OSSwapBigToHostInt64(x)
+#else
+#include <endian.h>
+#endif
 
 const uint64_t MAX_NUM_CONTIGS_PER_GVCF = 16777216; // 3 bytes wide
 const uint64_t MAX_CONTIG_LEN = 1099511627776;      // 5 bytes wide

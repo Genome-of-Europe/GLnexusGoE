@@ -168,7 +168,7 @@ TEST_CASE("BCFKeyValueData construction on improperly initialized database") {
 
 TEST_CASE("BCFKeyValueData initialization") {
     KeyValueMem::DB db({});
-    auto contigs = {make_pair<string,uint64_t>("21", 1000000), make_pair<string,uint64_t>("22", 1000001)};
+    auto contigs = {make_pair<string,size_t>("21", 1000000), make_pair<string,size_t>("22", 1000001)};
     REQUIRE(T::InitializeDB(&db, contigs).ok());
     unique_ptr<T> data;
     REQUIRE(T::Open(&db, data).ok());
@@ -244,7 +244,7 @@ TEST_CASE("BCFKeyValueData initialization") {
 
 TEST_CASE("BCFKeyValueData::import_gvcf") {
     KeyValueMem::DB db({});
-    vector<pair<string,uint64_t>> contigs = {make_pair<string,uint64_t>("21", 48129895)};
+    vector<pair<string,size_t>> contigs = {make_pair<string,size_t>("21", 48129895)};
     REQUIRE(T::InitializeDB(&db, contigs).ok());
     unique_ptr<T> data;
     REQUIRE(T::Open(&db, data).ok());
@@ -365,9 +365,9 @@ TEST_CASE("BCFKeyValueData::import_gvcf") {
 
     SECTION("multi-sample datasets") {
         db.wipe();
-        contigs = {make_pair<string,uint64_t>("A", 1000000),
-                   make_pair<string,uint64_t>("B", 1000000),
-                   make_pair<string,uint64_t>("C", 1000000)};
+        contigs = {make_pair<string,size_t>("A", 1000000),
+                   make_pair<string,size_t>("B", 1000000),
+                   make_pair<string,size_t>("C", 1000000)};
         REQUIRE(T::InitializeDB(&db, contigs).ok());
         REQUIRE(T::Open(&db, data).ok());
         REQUIRE(MetadataCache::Start(*data, cache).ok());
@@ -405,9 +405,9 @@ TEST_CASE("BCFKeyValueData::import_gvcf") {
 
     SECTION("range filter") {
         db.wipe();
-        contigs = {make_pair<string,uint64_t>("A", 1000000),
-                   make_pair<string,uint64_t>("B", 1000000),
-                   make_pair<string,uint64_t>("C", 1000000)};
+        contigs = {make_pair<string,size_t>("A", 1000000),
+                   make_pair<string,size_t>("B", 1000000),
+                   make_pair<string,size_t>("C", 1000000)};
         REQUIRE(T::InitializeDB(&db, contigs).ok());
         REQUIRE(T::Open(&db, data).ok());
         REQUIRE(MetadataCache::Start(*data, cache).ok());
@@ -463,7 +463,7 @@ TEST_CASE("BCFKeyValueData::import_gvcf") {
 
     SECTION("incompatible contigs") {
         db.wipe();
-        contigs = { make_pair<string,uint64_t>("21", 1000000), make_pair<string,uint64_t>("22", 1000000) };
+        contigs = { make_pair<string,size_t>("21", 1000000), make_pair<string,size_t>("22", 1000000) };
         Status s = T::InitializeDB(&db, contigs);
         REQUIRE(s.ok());
 
@@ -481,7 +481,7 @@ TEST_CASE("BCFKeyValueData::import_gvcf") {
 
     SECTION("detect bogus END field") {
         db.wipe();
-        contigs = { make_pair<string,uint64_t>("21", 1000000) };
+        contigs = { make_pair<string,size_t>("21", 1000000) };
         Status s = T::InitializeDB(&db, contigs);
         REQUIRE(s.ok());
 
@@ -528,7 +528,7 @@ TEST_CASE("BCFKeyValueData::import_gvcf") {
 
 TEST_CASE("BCFKeyValueData BCF retrieval") {
     KeyValueMem::DB db({});
-    auto contigs = {make_pair<string,uint64_t>("21", 48129895)};
+    auto contigs = {make_pair<string,size_t>("21", 48129895)};
     REQUIRE(T::InitializeDB(&db, contigs).ok());
     unique_ptr<T> data;
     REQUIRE(T::Open(&db, data).ok());
@@ -642,7 +642,7 @@ TEST_CASE("BCFKeyValueData range overlap with a single dataset") {
     for (int ilen : intervals) {
         //cout << "interval_len=" << ilen << endl;
         KeyValueMem::DB db({});
-        auto contigs = {make_pair<string,uint64_t>("21", 48129895)};
+        auto contigs = {make_pair<string,size_t>("21", 48129895)};
 
         // Buckets of size 9 break the ranges [1005 -- 1010] and [3004 -- 3006]
         // in two.
@@ -714,7 +714,7 @@ TEST_CASE("BCFKeyValueData long_confidence_intervals") {
 
     for (int ilen : intervals) {
         KeyValueMem::DB db({});
-        auto contigs = {make_pair<string,uint64_t>("21", 48129895)};
+        auto contigs = {make_pair<string,size_t>("21", 48129895)};
 
         // Buckets of size 9 break the ranges [1005 -- 1010] and [3004 -- 3006]
         // in two.
@@ -772,7 +772,7 @@ TEST_CASE("BCFKeyValueData long_confidence_intervals 2") {
 
     for (int ilen : intervals) {
         KeyValueMem::DB db({});
-        auto contigs = {make_pair<string,uint64_t>("21", 48129895)};
+        auto contigs = {make_pair<string,size_t>("21", 48129895)};
 
         REQUIRE(T::InitializeDB(&db, contigs, ilen).ok());
         unique_ptr<T> data;
@@ -864,7 +864,7 @@ TEST_CASE("BCFData::sampleset_range") {
     // returns iterators over 100kbp slices.
 
     KeyValueMem::DB db({});
-    auto contigs = {make_pair<string,uint64_t>("21", 48129895)};
+    auto contigs = {make_pair<string,size_t>("21", 48129895)};
     REQUIRE(T::InitializeDB(&db, contigs).ok());
     unique_ptr<T> data;
     REQUIRE(T::Open(&db, data).ok());
@@ -1075,7 +1075,7 @@ TEST_CASE("BCFKeyValueData::sampleset_range") {
     // This tests the optimized bucket-based range slicing in BCFKeyValueData
 
     KeyValueMem::DB db({});
-    auto contigs = {make_pair<string,uint64_t>("21", 48129895)};
+    auto contigs = {make_pair<string,size_t>("21", 48129895)};
     REQUIRE(T::InitializeDB(&db, contigs, 25000).ok());
     unique_ptr<T> data;
     REQUIRE(T::Open(&db, data).ok());
@@ -1347,7 +1347,7 @@ TEST_CASE("BCFKeyValueData compare iterator implementations") {
     int lenChrom = 48129895;
 
     KeyValueMem::DB db({});
-    auto contigs = {make_pair<string,uint64_t>("21", lenChrom)};
+    auto contigs = {make_pair<string,size_t>("21", lenChrom)};
     REQUIRE(T::InitializeDB(&db, contigs, 1011).ok());
     unique_ptr<T> data;
     REQUIRE(T::Open(&db, data).ok());
@@ -1402,7 +1402,7 @@ TEST_CASE("BCFKeyValueData too many contigs") {
     KeyValueMem::DB db({});
     std::vector<std::pair<std::string,size_t> > contigs;
     for (int i=0; i < 10002; ++i) {
-        contigs.push_back(make_pair<string,uint64_t>(to_string(i), 1000000));
+        contigs.push_back(make_pair<string,size_t>(to_string(i), 1000000));
     }
     Status s = T::InitializeDB(&db, contigs);
     REQUIRE(s.bad());
@@ -1411,7 +1411,7 @@ TEST_CASE("BCFKeyValueData too many contigs") {
 
 TEST_CASE("BCFKeyValueData::import_gvcf input validation") {
     KeyValueMem::DB db({});
-    auto contigs = {make_pair<string,uint64_t>("A", 1000000)};
+    auto contigs = {make_pair<string,size_t>("A", 1000000)};
     REQUIRE(T::InitializeDB(&db, contigs).ok());
     unique_ptr<T> data;
     REQUIRE(T::Open(&db, data).ok());
@@ -1460,7 +1460,7 @@ TEST_CASE("BCFKeyValueData NA12878 import and query") {
         // this test is too slow under valgrind
         return;
     }
-    vector<pair<string,uint64_t>> contigs;
+    vector<pair<string,size_t>> contigs;
     unique_ptr<vcfFile, void(*)(vcfFile*)> vcf(bcf_open("test/data/NA12878.g.vcf.gz", "r"),
                                                [](vcfFile* f) { bcf_close(f); });
     unique_ptr<bcf_hdr_t, void(*)(bcf_hdr_t*)> hdr(bcf_hdr_read(vcf.get()), &bcf_hdr_destroy);

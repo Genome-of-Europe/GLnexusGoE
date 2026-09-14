@@ -117,7 +117,7 @@ TEST_CASE("RocksDB initialization") {
     Status s = RocksKeyValue::Initialize(dbPath, opt, db);
     REQUIRE(s.ok());
 
-    auto contigs = {make_pair<string,uint64_t>("21", 1000000), make_pair<string,uint64_t>("22", 1000001)};
+    auto contigs = {make_pair<string,size_t>("21", 1000000), make_pair<string,size_t>("22", 1000001)};
     REQUIRE(T::InitializeDB(db.get(), contigs).ok());
     db.reset();
 
@@ -199,7 +199,7 @@ TEST_CASE("RocksDB::import_gvcf") {
     Status s = RocksKeyValue::Initialize(dbPath, opt, db);
     REQUIRE(s.ok());
 
-    auto contigs = {make_pair<string,uint64_t>("21", 48129895)};
+    auto contigs = {make_pair<string,size_t>("21", 48129895)};
     REQUIRE(T::InitializeDB(db.get(), contigs).ok());
     unique_ptr<T> data;
     REQUIRE(T::Open(db.get(), data).ok());
@@ -226,8 +226,8 @@ TEST_CASE("RocksDB::import_gvcf incompatible") {
     Status s = RocksKeyValue::Initialize(dbPath, RocksKeyValue::config(), db);
     REQUIRE(s.ok());
 
-    auto contigs = { make_pair<string,uint64_t>("21", 1000000),
-                     make_pair<string,uint64_t>("22", 1000000) };
+    auto contigs = { make_pair<string,size_t>("21", 1000000),
+                     make_pair<string,size_t>("22", 1000000) };
     REQUIRE(T::InitializeDB(db.get(), contigs).ok());
     unique_ptr<T> data;
     REQUIRE(T::Open(db.get(), data).ok());
@@ -249,7 +249,7 @@ TEST_CASE("RocksDB BCF retrieval") {
     Status s = RocksKeyValue::Initialize(dbPath, RocksKeyValue::config(), db);
     REQUIRE(s.ok());
 
-    auto contigs = {make_pair<string,uint64_t>("21", 48129895)};
+    auto contigs = {make_pair<string,size_t>("21", 48129895)};
     REQUIRE(T::InitializeDB(db.get(), contigs).ok());
     unique_ptr<T> data;
     REQUIRE(T::Open(db.get(), data).ok());
@@ -354,7 +354,7 @@ TEST_CASE("RocksKeyValue prefix mode") {
     Status s = RocksKeyValue::Initialize(dbPath, opt, db);
     REQUIRE(s.ok());
 
-    auto contigs = {make_pair<string,uint64_t>("21", 48129895)};
+    auto contigs = {make_pair<string,size_t>("21", 48129895)};
     REQUIRE(T::InitializeDB(db.get(), contigs).ok());
     unique_ptr<T> data;
     REQUIRE(T::Open(db.get(), data).ok());
@@ -512,7 +512,7 @@ TEST_CASE("Multi-threading") {
     Status s = RocksKeyValue::Initialize(dbPath, RocksKeyValue::config(), db);
     REQUIRE(s.ok());
 
-    auto contigs = {make_pair<string,uint64_t>("21", 48129895)};
+    auto contigs = {make_pair<string,size_t>("21", 48129895)};
     REQUIRE(T::InitializeDB(db.get(), contigs).ok());
     unique_ptr<T> data;
     REQUIRE(T::Open(db.get(), data).ok());
@@ -598,7 +598,7 @@ TEST_CASE("Concurrent import/query") {
     Status s = RocksKeyValue::Initialize(dbPath, RocksKeyValue::config(), db);
     REQUIRE(s.ok());
 
-    auto contigs = {make_pair<string,uint64_t>("21", 48129895)};
+    auto contigs = {make_pair<string,size_t>("21", 48129895)};
     REQUIRE(T::InitializeDB(db.get(), contigs).ok());
     unique_ptr<T> data;
     REQUIRE(T::Open(db.get(), data).ok());

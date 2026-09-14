@@ -9,7 +9,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include "crc32c.h"
+#include "util/crc32c.h"
 #include "service.h"
 #include "compare_queries.h"
 #include "spdlog/sinks/null_sink.h"
