@@ -100,3 +100,36 @@ Summary of changes made to compile GLnexus and pass unit tests natively on macOS
     * Corrected REF string length in two synthetic gVCF test records (`ACACGGTTAA` -> `ACACGGTTA` for 9 bp interval, `ATAT` -> `ATA` for 3 bp interval). Modern htslib enforces `rlen >= strlen(REF)`.
   * **YAML Test Cases (`test/data/gvcf_test_cases/*.yml`)**:
     * Fixed unclosed `##FILTER=<ID=LowQual...>` and truncated `##FORMAT=<ID=AD...>` header lines across 5 test specification YAML files to prevent htslib `Incomplete header line` warnings.
+
+---
+
+## 6. Dependency Status & Upgrade Roadmap
+
+| Dependency | Current | Latest | Update? | Difficulty | Notes / Caveats |
+|---|---|---|---|---|---|
+| **yaml-cpp** | 0.8.0 | 0.8.0 | **Done** | **Low** | Upgraded. Replaced 0.6.3 with 0.8.0. |
+| **spdlog** | 1.15.1 | 1.15.1 | **Done** | **Low** | Upgraded. Replaced 1.8.2 with 1.15.1. |
+| **capnp** | 0.7.0 | 1.0.2 | **Yes** | **Medium** | Fixes ARM64 quirks (we disabled `check`). Wire format backward-compatible. Generated C++ compiler output needs verification. |
+| **rocksdb** | 6.29.3 | 9.10.x | **No** (hold) | **High** | RocksDB 8+ requires C++17 (GLnexus is `-std=c++14`). Breaking C++ API changes (`SstFileWriter`, options). Complex build/SIMD matrix. |
+| **catch** (tests) | 1.12.2 (v1) | 3.8.0 (v3) | **No** | **High** | Catch v1 -> v3 is total rewrite. Drops single-header `catch.hpp`, breaks macros across all 12 test files. High effort, zero runtime benefit. |
+| **CTPL** | 0.0.2 | 0.0.2 | **No** | **N/A** | Abandoned header library (2016). No newer version exists. |
+| **fcmm** | 1.0.1 | 1.0.1 | **No** | **N/A** | Upstream deleted; we use mirror. No newer version exists. |
+
+---
+
+## 7. Upgrade yaml-cpp to 0.8.0
+
+* **Build System (`CMakeLists.txt`)**:
+  * Upgraded `yaml-cpp` `URL` from `yaml-cpp-0.6.3.zip` to `0.8.0.tar.gz`.
+  * Verified in-source build produces `libyaml-cpp.a` cleanly under AppleClang.
+
+---
+
+## 8. Upgrade spdlog to 1.15.1
+
+* **Build System (`CMakeLists.txt`)**:
+  * Upgraded `spdlog` `URL` from `v1.8.2.tar.gz` to `v1.15.1.tar.gz`.
+  * Added `PATCH_COMMAND` to substitute `str(S())` and `string_view(S())` with `str(S{})` and `string_view(S{})` in bundled `{fmt}` (`include/spdlog/fmt/bundled/base.h`).
+  * *Rationale*: Prevents macro collision with GLnexus's `#define S(st)` in `include/types.h`. Eliminates compiler deprecation warnings from legacy bundled `{fmt}`.
+
+

@@ -123,7 +123,7 @@ set_property(TARGET librocksdb PROPERTY IMPORTED_LOCATION ${LIBROCKSDB_A})
 # After build, double-check external/src/yaml-cpp-stamp/yaml-cpp-build-out.log
 # to make sure CFLAGS were set as expected
 ExternalProject_Add(yaml-cpp
-    URL https://github.com/jbeder/yaml-cpp/archive/yaml-cpp-0.6.3.zip
+    URL https://github.com/jbeder/yaml-cpp/archive/0.8.0.tar.gz
     PREFIX ${CMAKE_CURRENT_BINARY_DIR}/external
     CONFIGURE_COMMAND cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DYAML_CPP_BUILD_TESTS=OFF -DYAML_CPP_BUILD_TOOLS=OFF -DYAML_CPP_BUILD_CONTRIB=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS=${ARCH_FLAGS} .
     BUILD_IN_SOURCE 1
@@ -167,9 +167,10 @@ set(FCMM_INCLUDE_DIR ${source_dir})
 include_directories(${FCMM_INCLUDE_DIR})
 
 ExternalProject_Add(spdlog
-    URL https://github.com/gabime/spdlog/archive/v1.8.2.tar.gz
+    URL https://github.com/gabime/spdlog/archive/v1.15.1.tar.gz
     PREFIX ${CMAKE_CURRENT_BINARY_DIR}/external
     CONFIGURE_COMMAND ""
+    PATCH_COMMAND sed -i.bak -e "s|str(S())|str(S{})|g" -e "s|string_view(S())|string_view(S{})|g" include/spdlog/fmt/bundled/base.h
     BUILD_IN_SOURCE 1
     BUILD_COMMAND ""
     INSTALL_COMMAND ""
