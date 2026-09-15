@@ -107,7 +107,7 @@ ExternalProject_Add(rocksdb
     PREFIX ${CMAKE_CURRENT_BINARY_DIR}/external
     CONFIGURE_COMMAND ""
     BUILD_IN_SOURCE 1
-    BUILD_COMMAND bash -c "export PORTABLE=1 && export DISABLE_JEMALLOC=1 && export OPT='-DNDEBUG -O3 ${ROCKSDB_ARCH_OPT} -DROCKSDB_NO_DYNAMIC_EXTENSION' && export EXTRA_CXXFLAGS='-Wno-error ${ROCKSDB_EXTRA_CXXFLAGS}' && export EXTRA_LDFLAGS='${ROCKSDB_EXTRA_LDFLAGS}' && make -n static_lib && make -j$(nproc) static_lib"
+    BUILD_COMMAND bash -c "export PORTABLE=1 && export DISABLE_JEMALLOC=1 && export OPT='-DNDEBUG -O3 ${ROCKSDB_ARCH_OPT} -DROCKSDB_NO_DYNAMIC_EXTENSION' && export EXTRA_CXXFLAGS='-include cstdint -Wno-error ${ROCKSDB_EXTRA_CXXFLAGS}' && export EXTRA_LDFLAGS='${ROCKSDB_EXTRA_LDFLAGS}' && make -n static_lib && make -j$(nproc) static_lib"
     INSTALL_COMMAND ""
     LOG_DOWNLOAD ON
     LOG_BUILD ON
@@ -195,6 +195,12 @@ execute_process(COMMAND git describe --tags --long --dirty --always
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DGIT_REVISION=\"\\\"${GIT_REVISION}\\\"\" -pthread -std=c++14 -Wall -Werror=return-type -Werror=unused-result -Wno-sign-compare -Wno-write-strings -Wno-terminate -Wno-return-type-c-linkage -fdiagnostics-color=auto ${ARCH_FLAGS}")
 set(CMAKE_CXX_FLAGS_RELEASE "-gdwarf -DNDEBUG -O3")
 
+option(BUILD_DEPS_ONLY "Only fetch and build external dependencies" OFF)
+if(BUILD_DEPS_ONLY)
+  add_custom_target(dependencies ALL DEPENDS htslib rocksdb yaml-cpp CTPL fcmm spdlog capnp)
+  return()
+endif()
+
 ################################
 # Normal Libraries & Executables
 ################################
@@ -245,7 +251,7 @@ if(APPLE)
   set(GLNEXUS_DEPS glnexus libhts librocksdb libyaml-cpp z snappy bz2 zstd lzma lz4 libcapnp.a libkj.a)
 else()
   set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${ARCH_FLAGS} -static-libstdc++ -pthread")
-  set(GLNEXUS_DEPS glnexus libhts librocksdb libyaml-cpp libz.a libsnappy.a libbz2.a libzstd.a liblzma.a librt.a libcapnp.a libkj.a)
+  set(GLNEXUS_DEPS glnexus libhts librocksdb libyaml-cpp libz.a libsnappy.a libbz2.a libzstd.a liblzma.a librt.a libcapnp.a libkj.a m)
 endif()
 
 add_executable(glnexus_cli cli/glnexus_cli.cc)
@@ -262,7 +268,7 @@ ExternalProject_Add(catch
   URL https://github.com/philsquared/Catch/archive/v1.12.2.zip
   PREFIX ${CMAKE_CURRENT_BINARY_DIR}/external
   CONFIGURE_COMMAND ""
-  PATCH_COMMAND sed -i.bak "s|__asm__(\"int \\$3\\\\n\" : : /\\* NOLINT \\*/ )|__builtin_debugtrap()|" single_include/catch.hpp
+  PATCH_COMMAND sed -i.bak -e "s|__asm__(\"int \\$3\\\\n\" : : /\\* NOLINT \\*/ )|__builtin_debugtrap()|" -e "s|altStackMem\\[SIGSTKSZ\\]|altStackMem[32768]|g" -e "s|sigStack.ss_size = SIGSTKSZ|sigStack.ss_size = sizeof(altStackMem)|g" single_include/catch.hpp
   BUILD_COMMAND ""
   INSTALL_COMMAND ""
   LOG_DOWNLOAD ON

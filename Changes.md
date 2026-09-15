@@ -132,4 +132,23 @@ Summary of changes made to compile GLnexus and pass unit tests natively on macOS
   * Added `PATCH_COMMAND` to substitute `str(S())` and `string_view(S())` with `str(S{})` and `string_view(S{})` in bundled `{fmt}` (`include/spdlog/fmt/bundled/base.h`).
   * *Rationale*: Prevents macro collision with GLnexus's `#define S(st)` in `include/types.h`. Eliminates compiler deprecation warnings from legacy bundled `{fmt}`.
 
+---
 
+## 9. Modernize Dockerfile to Ubuntu 24.04 & 3-Stage Multi-Arch Build
+
+* **3-Stage Docker Build (`Dockerfile`)**:
+  * **Stage 1 (`dependencies`)**: Pre-fetches and compiles heavy C++ libraries (RocksDB, htslib, Cap'n Proto, yaml-cpp, spdlog) using `-DBUILD_DEPS_ONLY=ON`. Installs `python3-vcf`, `bcftools`, and `pv` for test execution. Fully cached by Docker across application code changes.
+  * **Stage 2 (`builder`)**: Compiles `glnexus_cli` and `unit_tests` from `dependencies` in ~20 seconds. Sets `CMD ["ctest", "-V"]` for on-demand test execution.
+  * **Stage 3 (`runtime`)**: Slim `ubuntu:24.04` image (~470MB) containing only runtime libraries (`libjemalloc2`, `bcftools`, `tabix`, `pv`) and the `glnexus_cli` executable.
+* **Modern OS & Security**:
+  * Bumped builder and runtime bases to **Ubuntu 24.04 LTS** (Noble Numbat).
+  * Removed legacy unmaintained `spvcf` download.
+  * Replaced deprecated `python3-pyvcf` with Ubuntu 24.04 package `python3-vcf`.
+* **Multi-Arch (x86_64 & ARM64) and Modern Toolchain Fixes**:
+  * **Jemalloc path**: Replaced hardcoded `/usr/lib/x86_64-linux-gnu/libjemalloc.so.2` with dynamic symlink `/usr/lib/*-linux-gnu/libjemalloc.so.2` to support both x86_64 and aarch64.
+  * **RocksDB GCC 13/14 compatibility**: Added `-include cstdint` to RocksDB's `EXTRA_CXXFLAGS` in [CMakeLists.txt](file:///Users/vinter/projects/GLnexus/CMakeLists.txt).
+  * **Glibc symbol versioning**: Gated `__asm__(".symver logf,logf@GLIBC_2.2.5");` in [src/genotyper.cc](file:///Users/vinter/projects/GLnexus/src/genotyper.cc) to `defined(__x86_64__)` (since `GLIBC_2.2.5` does not exist on ARM64).
+  * **Math library linkage**: Added `m` (`libm`) to `GLNEXUS_DEPS` on Linux in [CMakeLists.txt](file:///Users/vinter/projects/GLnexus/CMakeLists.txt).
+  * **Catch v1 glibc 2.34+ compatibility**: Added patch to [CMakeLists.txt](file:///Users/vinter/projects/GLnexus/CMakeLists.txt) replacing `altStackMem[SIGSTKSZ]` with fixed buffer size `[32768]` in `catch.hpp` (in glibc 2.34+, `SIGSTKSZ` is no longer an integral constant expression).
+* **Workspace Isolation**:
+  * Added [`.dockerignore`](file:///Users/vinter/projects/GLnexus/.dockerignore) to prevent local macOS caches and binaries from polluting container builds.

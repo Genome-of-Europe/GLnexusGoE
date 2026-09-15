@@ -8,9 +8,9 @@ using namespace std;
 
 #include "genotyper_utils.h"
 
-// Prevent dependency on unnecessarily new version of glibc/libm
+// Prevent dependency on unnecessarily new version of glibc/libm (x86_64 only)
 // https://stackoverflow.com/a/5977518
-#if defined(__linux__) && defined(__GLIBC__)
+#if defined(__linux__) && defined(__GLIBC__) && defined(__x86_64__)
 __asm__(".symver logf,logf@GLIBC_2.2.5");
 #endif
 
