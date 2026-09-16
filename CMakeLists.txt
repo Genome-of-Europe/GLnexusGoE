@@ -1,25 +1,25 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.20)
 include(ExternalProject)
 
-IF(NOT CMAKE_BUILD_TYPE)
-  SET(CMAKE_BUILD_TYPE Release CACHE STRING
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Release CACHE STRING
       "Choose the type of build, options are: None Debug Release RelWithDebInfo MinSizeRel."
       FORCE)
-ENDIF(NOT CMAKE_BUILD_TYPE)
+endif(NOT CMAKE_BUILD_TYPE)
 
-SET(CMAKE_CXX_FLAGS_COVERAGE
+set(CMAKE_CXX_FLAGS_COVERAGE
     "-g -O0 --coverage -fprofile-arcs -ftest-coverage"
     CACHE STRING "Flags used by the C++ compiler during coverage builds."
     FORCE )
-SET(CMAKE_C_FLAGS_COVERAGE
+set(CMAKE_C_FLAGS_COVERAGE
     "-g -O0 --coverage -fprofile-arcs -ftest-coverage"
     CACHE STRING "Flags used by the C compiler during coverage builds."
     FORCE )
-SET(CMAKE_EXE_LINKER_FLAGS_COVERAGE
+set(CMAKE_EXE_LINKER_FLAGS_COVERAGE
     ""
     CACHE STRING "Flags used for linking binaries during coverage builds."
     FORCE )
-SET(CMAKE_SHARED_LINKER_FLAGS_COVERAGE
+set(CMAKE_SHARED_LINKER_FLAGS_COVERAGE
     ""
     CACHE STRING "Flags used by the shared libraries linker during coverage builds."
     FORCE )
@@ -28,7 +28,7 @@ MARK_AS_ADVANCED(
     CMAKE_C_FLAGS_COVERAGE
     CMAKE_EXE_LINKER_FLAGS_COVERAGE
     CMAKE_SHARED_LINKER_FLAGS_COVERAGE )
-SET(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Make PROJECT_SOURCE_DIR, PROJECT_BINARY_DIR, and PROJECT_NAME available.
 project(GLnexus)
@@ -36,8 +36,8 @@ project(GLnexus)
 INCLUDE(ExternalProject)
 INCLUDE_DIRECTORIES(BEFORE ${CMAKE_BINARY_DIR}/external/include)
 LINK_DIRECTORIES(${CMAKE_BINARY_DIR}/external/lib)
-SET(ENV{PATH} ${CMAKE_BINARY_DIR}/external/bin:$ENV{PATH})
-SET(ENV{PKG_CONFIG_PATH} ${CMAKE_BINARY_DIR}/external/lib/pkgconfig)
+set(ENV{PATH} ${CMAKE_BINARY_DIR}/external/bin:$ENV{PATH})
+set(ENV{PKG_CONFIG_PATH} ${CMAKE_BINARY_DIR}/external/lib/pkgconfig)
 
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
   set(ARCH_FLAGS "-march=ivybridge")
