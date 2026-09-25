@@ -180,3 +180,14 @@ Summary of changes made to compile GLnexus and pass unit tests natively on macOS
   * **Modernized code coverage**: Replaced 21 lines of forced cache variables and custom `Coverage` build type with standard `option(ENABLE_COVERAGE "..." OFF)` using `add_compile_options(--coverage -O0 -g)` and `add_link_options(--coverage)`.
   * **Target-scoped compiler options**: Replaced global `CMAKE_CXX_FLAGS` mutation for `-Wno-unused-function` with `target_compile_options(unit_tests PRIVATE -Wno-unused-function)`.
   * **Consolidated dependencies**: Combined multiple `add_dependencies(glnexus ...)` invocations into a single call.
+
+---
+
+## 12. Restructure CMakeLists.txt into 8 Target-Based Sections
+
+* **Visual Architecture & Logical Sections**:
+  * Restructured [CMakeLists.txt](file:///Users/vinter/projects/GLnexus/CMakeLists.txt) into 8 clearly defined, logically ordered blocks.
+* **Modern Target-Based Property Migration**:
+  * **Eliminated Global Compiler Flags**: Removed global `CMAKE_CXX_FLAGS` mutations and applied flags directly to `glnexus` via `target_compile_definitions` (`GIT_REVISION`) and `target_compile_options` (`-Wall`, `-pthread`, `-Werror=...`, `-fdiagnostics-color=auto`, `${ARCH_FLAGS}`, `$<$<CXX_COMPILER_ID:GNU>:-Wno-terminate>`, `$<$<CONFIG:Release>:-gdwarf>`), which are automatically inherited by downstream targets.
+  * **Dynamic Homebrew Detection**: Replaced hardcoded `/opt/homebrew` paths with dynamic `brew --prefix` querying, supporting Apple Silicon, Intel Macs, and custom `CMAKE_PREFIX_PATH`.
+  * **Testing Opt-Out (`BUILD_TESTING`)**: Wrapped the entire testing section in `if(BUILD_TESTING)` (standard CTest toggle) to enable opting out of test builds via `-DBUILD_TESTING=OFF`.
