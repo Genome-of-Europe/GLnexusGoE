@@ -1,40 +1,31 @@
 cmake_minimum_required(VERSION 3.20)
+if(POLICY CMP0135)
+  cmake_policy(SET CMP0135 NEW)
+endif()
 include(ExternalProject)
 
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release CACHE STRING
       "Choose the type of build, options are: None Debug Release RelWithDebInfo MinSizeRel."
       FORCE)
-endif(NOT CMAKE_BUILD_TYPE)
+endif()
 
-set(CMAKE_CXX_FLAGS_COVERAGE
-    "-g -O0 --coverage -fprofile-arcs -ftest-coverage"
-    CACHE STRING "Flags used by the C++ compiler during coverage builds."
-    FORCE )
-set(CMAKE_C_FLAGS_COVERAGE
-    "-g -O0 --coverage -fprofile-arcs -ftest-coverage"
-    CACHE STRING "Flags used by the C compiler during coverage builds."
-    FORCE )
-set(CMAKE_EXE_LINKER_FLAGS_COVERAGE
-    ""
-    CACHE STRING "Flags used for linking binaries during coverage builds."
-    FORCE )
-set(CMAKE_SHARED_LINKER_FLAGS_COVERAGE
-    ""
-    CACHE STRING "Flags used by the shared libraries linker during coverage builds."
-    FORCE )
-MARK_AS_ADVANCED(
-    CMAKE_CXX_FLAGS_COVERAGE
-    CMAKE_C_FLAGS_COVERAGE
-    CMAKE_EXE_LINKER_FLAGS_COVERAGE
-    CMAKE_SHARED_LINKER_FLAGS_COVERAGE )
+option(ENABLE_COVERAGE "Enable code coverage instrumentation" OFF)
+if(ENABLE_COVERAGE)
+  add_compile_options(--coverage -O0 -g)
+  add_link_options(--coverage)
+endif()
+
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Make PROJECT_SOURCE_DIR, PROJECT_BINARY_DIR, and PROJECT_NAME available.
 project(GLnexus)
 
-INCLUDE(ExternalProject)
-INCLUDE_DIRECTORIES(BEFORE ${CMAKE_BINARY_DIR}/external/include)
+cmake_host_system_information(RESULT NUM_CORES QUERY NUMBER_OF_LOGICAL_CORES)
+if(NOT NUM_CORES OR NUM_CORES LESS 1)
+  set(NUM_CORES 4)
+endif()
+
 LINK_DIRECTORIES(${CMAKE_BINARY_DIR}/external/lib)
 set(ENV{PATH} ${CMAKE_BINARY_DIR}/external/bin:$ENV{PATH})
 set(ENV{PKG_CONFIG_PATH} ${CMAKE_BINARY_DIR}/external/lib/pkgconfig)
@@ -66,7 +57,7 @@ ExternalProject_Add(htslib
     CONFIGURE_COMMAND ""
     PATCH_COMMAND sed -i.bak -e "s|^CFLAGS .*$|CFLAGS = -gdwarf -O3 -DNDEBUG ${ARCH_FLAGS} ${HTSLIB_EXTRA_CFLAGS}|" -e "s|^NONCONFIGURE_OBJS =.*$|NONCONFIGURE_OBJS =|" -e "s|echo '#define HAVE_LIBCURL 1' >> \\$@||" Makefile
     BUILD_IN_SOURCE 1
-    BUILD_COMMAND bash -c "make -n libhts.a && make -j$(nproc) libhts.a"
+    BUILD_COMMAND bash -c "make -n libhts.a && make -j${NUM_CORES} libhts.a"
     INSTALL_COMMAND ""
     LOG_DOWNLOAD ON
     LOG_BUILD ON
@@ -169,14 +160,17 @@ ExternalProject_Add(capnp
     PREFIX ${CMAKE_CURRENT_BINARY_DIR}/external
     CONFIGURE_COMMAND ./configure --prefix=${CMAKE_BINARY_DIR}/external
     BUILD_IN_SOURCE 1
-    BUILD_COMMAND bash -c "make -j$(nproc)"
+    BUILD_COMMAND bash -c "make -j${NUM_CORES}"
     INSTALL_COMMAND make install
     LOG_DOWNLOAD ON
   )
 
 execute_process(COMMAND git describe --tags --long --dirty --always
                 OUTPUT_VARIABLE GIT_REVISION OUTPUT_STRIP_TRAILING_WHITESPACE)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DGIT_REVISION=\"\\\"${GIT_REVISION}\\\"\" -pthread -std=c++14 -Wall -Werror=return-type -Werror=unused-result -Wno-sign-compare -Wno-write-strings -Wno-terminate -Wno-return-type-c-linkage -fdiagnostics-color=auto ${ARCH_FLAGS}")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DGIT_REVISION=\"\\\"${GIT_REVISION}\\\"\" -pthread -std=c++14 -Wall -Werror=return-type -Werror=unused-result -Wno-sign-compare -Wno-write-strings -Wno-return-type-c-linkage -fdiagnostics-color=auto ${ARCH_FLAGS}")
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-terminate")
+endif()
 set(CMAKE_CXX_FLAGS_RELEASE "-gdwarf -DNDEBUG -O3")
 
 option(BUILD_DEPS_ONLY "Only fetch and build external dependencies" OFF)
@@ -221,11 +215,9 @@ target_include_directories(glnexus
     src
     src/rocksdb/include
     capnp/serialize
+    ${CMAKE_BINARY_DIR}/external/include
 )
-add_dependencies(glnexus htslib)
-add_dependencies(glnexus rocksdb)
-add_dependencies(glnexus yaml-cpp)
-add_dependencies(glnexus capnp)
+add_dependencies(glnexus htslib rocksdb yaml-cpp capnp)
 add_library(libglnexus ALIAS glnexus)
 
 if(APPLE)
@@ -260,7 +252,6 @@ add_library(libcatch INTERFACE)
 add_dependencies(libcatch catch)
 target_include_directories(libcatch INTERFACE ${source_dir}/single_include)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused-function")
 add_executable(unit_tests
                 src/diploid.cc test/diploid.cc
                 test/unit_tests.cc
@@ -275,6 +266,7 @@ add_executable(unit_tests
                 test/unifier.cc
                 test/cli_utils.cc
                 test/cli.cc)
+target_compile_options(unit_tests PRIVATE -Wno-unused-function)
 target_link_libraries(unit_tests PRIVATE glnexus libcatch)
 
 include(CTest)

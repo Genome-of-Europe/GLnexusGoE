@@ -166,3 +166,17 @@ Summary of changes made to compile GLnexus and pass unit tests natively on macOS
   * **fcmm (`third_party/fcmm`)**: Vendored header-only library `fcmm.hpp`, `LICENSE`, and `README`. Avoids external build-time dependency on third-party GitHub mirrors (`sigiesec/fcmm`) after upstream repository deletion (`giacomodrago/fcmm`).
   * **CTPL (`third_party/ctpl`)**: Vendored header-only threadpool library `ctpl.h`, `ctpl_stl.h`, `LICENSE`, and `README.md`. Removed `ExternalProject_Add` download from `github.com/vit-vit/CTPL`.
   * **CMake Integration**: Wired both as local interface libraries (`libfcmm`, `libctpl`) pointing directly to `third_party/`, dropping them from `ExternalProject_Add` and `BUILD_DEPS_ONLY`.
+
+---
+
+## 11. CMake Policy, Warning & Portability Fixes
+
+* **Build Diagnostics & Policies (`CMakeLists.txt`)**:
+  * **CMake policy CMP0135**: Set `CMP0135 NEW` to preserve archive extraction timestamps properly and eliminate author deprecation warnings across external projects.
+  * **Clang warning cleanup**: Gated GCC-specific `-Wno-terminate` flag to `CMAKE_CXX_COMPILER_ID STREQUAL "GNU"`, eliminating `-Wunknown-warning-option` diagnostics on AppleClang / LLVM Clang.
+* **Portability & Include Hygiene**:
+  * **Cross-platform build concurrency**: Replaced hardcoded `make -j$(nproc)` in `htslib` and `capnp` with native CMake core query `cmake_host_system_information(RESULT NUM_CORES QUERY NUMBER_OF_LOGICAL_CORES)`, passing clean `-j${NUM_CORES}`.
+  * **Purged last global include**: Removed duplicate `INCLUDE(ExternalProject)` call and moved the last directory-level `INCLUDE_DIRECTORIES` into target-scoped `target_include_directories(glnexus PRIVATE ${CMAKE_BINARY_DIR}/external/include)`.
+  * **Modernized code coverage**: Replaced 21 lines of forced cache variables and custom `Coverage` build type with standard `option(ENABLE_COVERAGE "..." OFF)` using `add_compile_options(--coverage -O0 -g)` and `add_link_options(--coverage)`.
+  * **Target-scoped compiler options**: Replaced global `CMAKE_CXX_FLAGS` mutation for `-Wno-unused-function` with `target_compile_options(unit_tests PRIVATE -Wno-unused-function)`.
+  * **Consolidated dependencies**: Combined multiple `add_dependencies(glnexus ...)` invocations into a single call.
