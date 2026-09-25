@@ -112,8 +112,8 @@ Summary of changes made to compile GLnexus and pass unit tests natively on macOS
 | **capnp** | 0.7.0 | 1.0.2 | **Yes** | **Medium** | Fixes ARM64 quirks (we disabled `check`). Wire format backward-compatible. Generated C++ compiler output needs verification. |
 | **rocksdb** | 6.29.3 | 9.10.x | **No** (hold) | **High** | RocksDB 8+ requires C++17 (GLnexus is `-std=c++14`). Breaking C++ API changes (`SstFileWriter`, options). Complex build/SIMD matrix. |
 | **catch** (tests) | 1.12.2 (v1) | 3.8.0 (v3) | **No** | **High** | Catch v1 -> v3 is total rewrite. Drops single-header `catch.hpp`, breaks macros across all 12 test files. High effort, zero runtime benefit. |
-| **CTPL** | 0.0.2 | 0.0.2 | **No** | **N/A** | Abandoned header library (2016). No newer version exists. |
-| **fcmm** | 1.0.1 | 1.0.1 | **No** | **N/A** | Upstream deleted; we use mirror. No newer version exists. |
+| **CTPL** | 0.0.2 | 0.0.2 | **Vendored** | **N/A** | Abandoned header library (2016); vendored into `third_party/ctpl`. |
+| **fcmm** | 1.0.1 | 1.0.1 | **Vendored** | **N/A** | Upstream deleted; vendored header in `third_party/fcmm`. |
 
 ---
 
@@ -152,3 +152,17 @@ Summary of changes made to compile GLnexus and pass unit tests natively on macOS
   * **Catch v1 glibc 2.34+ compatibility**: Added patch to [CMakeLists.txt](file:///Users/vinter/projects/GLnexus/CMakeLists.txt) replacing `altStackMem[SIGSTKSZ]` with fixed buffer size `[32768]` in `catch.hpp` (in glibc 2.34+, `SIGSTKSZ` is no longer an integral constant expression).
 * **Workspace Isolation**:
   * Added [`.dockerignore`](file:///Users/vinter/projects/GLnexus/.dockerignore) to prevent local macOS caches and binaries from polluting container builds.
+
+---
+
+## 10. Modernize CMake to Target-Based Architecture & Vendor Header Libraries (fcmm, CTPL)
+
+* **Modern Target-Based CMake Architecture (`CMakeLists.txt`)**:
+  * **Removed global directory pollution**: Replaced legacy directory-level `include_directories()` calls with proper target-scoped include properties (`INTERFACE_INCLUDE_DIRECTORIES` on `libhts`, `librocksdb`, `libyaml-cpp`).
+  * **Interface libraries for header-only dependencies**: Wrapped `spdlog` and `catch` in interface targets (`libspdlog`, `libcatch`) with `INTERFACE` include directories and explicit target dependencies.
+  * **Target-centric compilation & includes for `glnexus`**: Replaced global `COMMON_INCLUDES` with `target_include_directories(glnexus PUBLIC ... PRIVATE ...)` and declared standard via `target_compile_features(glnexus PUBLIC cxx_std_14)`.
+  * **Transitive target linkage**: Simplified `glnexus_cli` and `unit_tests` to link directly to `glnexus` (and `libcatch` for tests) via `PRIVATE` target linkage, leveraging CMake transitive usage requirements instead of redundant global `GLNEXUS_DEPS` lists.
+* **Source Vendoring (`third_party/`)**:
+  * **fcmm (`third_party/fcmm`)**: Vendored header-only library `fcmm.hpp`, `LICENSE`, and `README`. Avoids external build-time dependency on third-party GitHub mirrors (`sigiesec/fcmm`) after upstream repository deletion (`giacomodrago/fcmm`).
+  * **CTPL (`third_party/ctpl`)**: Vendored header-only threadpool library `ctpl.h`, `ctpl_stl.h`, `LICENSE`, and `README.md`. Removed `ExternalProject_Add` download from `github.com/vit-vit/CTPL`.
+  * **CMake Integration**: Wired both as local interface libraries (`libfcmm`, `libctpl`) pointing directly to `third_party/`, dropping them from `ExternalProject_Add` and `BUILD_DEPS_ONLY`.

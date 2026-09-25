@@ -73,11 +73,12 @@ ExternalProject_Add(htslib
   )
 ExternalProject_Get_Property(htslib source_dir)
 set(HTSLIB_INCLUDE_DIR ${source_dir}/htslib ${source_dir})
-include_directories(BEFORE ${HTSLIB_INCLUDE_DIR})
 ExternalProject_Get_Property(htslib binary_dir)
 add_library(libhts STATIC IMPORTED)
 set(LIBHTS_A ${binary_dir}/libhts.a)
-set_property(TARGET libhts PROPERTY IMPORTED_LOCATION ${LIBHTS_A})
+set_target_properties(libhts PROPERTIES
+    IMPORTED_LOCATION ${LIBHTS_A}
+    INTERFACE_INCLUDE_DIRECTORIES "${HTSLIB_INCLUDE_DIR}")
 
 # RocksDB
 #
@@ -114,11 +115,12 @@ ExternalProject_Add(rocksdb
   )
 ExternalProject_Get_Property(rocksdb source_dir)
 set(ROCKSDB_INCLUDE_DIR ${source_dir}/include ${source_dir})
-include_directories(${ROCKSDB_INCLUDE_DIR})
 ExternalProject_Get_Property(rocksdb binary_dir)
 add_library(librocksdb STATIC IMPORTED)
 set(LIBROCKSDB_A ${binary_dir}/librocksdb.a)
-set_property(TARGET librocksdb PROPERTY IMPORTED_LOCATION ${LIBROCKSDB_A})
+set_target_properties(librocksdb PROPERTIES
+    IMPORTED_LOCATION ${LIBROCKSDB_A}
+    INTERFACE_INCLUDE_DIRECTORIES "${ROCKSDB_INCLUDE_DIR}")
 
 # After build, double-check external/src/yaml-cpp-stamp/yaml-cpp-build-out.log
 # to make sure CFLAGS were set as expected
@@ -134,37 +136,18 @@ ExternalProject_Add(yaml-cpp
   )
 ExternalProject_Get_Property(yaml-cpp source_dir)
 set(YAML_CPP_INCLUDE_DIR ${source_dir}/include)
-include_directories(${YAML_CPP_INCLUDE_DIR})
 ExternalProject_Get_Property(yaml-cpp binary_dir)
 add_library(libyaml-cpp STATIC IMPORTED)
 set(LIBYAML_CPP_A ${binary_dir}/libyaml-cpp.a)
-set_property(TARGET libyaml-cpp PROPERTY IMPORTED_LOCATION ${LIBYAML_CPP_A})
+set_target_properties(libyaml-cpp PROPERTIES
+    IMPORTED_LOCATION ${LIBYAML_CPP_A}
+    INTERFACE_INCLUDE_DIRECTORIES "${YAML_CPP_INCLUDE_DIR}")
 
-ExternalProject_Add(CTPL
-    URL https://github.com/vit-vit/CTPL/archive/v.0.0.2.zip
-    PREFIX ${CMAKE_CURRENT_BINARY_DIR}/external
-    CONFIGURE_COMMAND ""
-    BUILD_IN_SOURCE 1
-    BUILD_COMMAND ""
-    INSTALL_COMMAND ""
-    LOG_DOWNLOAD ON
-  )
-ExternalProject_Get_Property(CTPL source_dir)
-set(CTPL_INCLUDE_DIR ${source_dir})
-include_directories(${CTPL_INCLUDE_DIR})
+add_library(libctpl INTERFACE)
+target_include_directories(libctpl INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/third_party/ctpl)
 
-ExternalProject_Add(fcmm
-    URL https://github.com/sigiesec/fcmm/archive/v1.0.1.zip
-    PREFIX ${CMAKE_CURRENT_BINARY_DIR}/external
-    CONFIGURE_COMMAND ""
-    BUILD_IN_SOURCE 1
-    BUILD_COMMAND ""
-    INSTALL_COMMAND ""
-    LOG_DOWNLOAD ON
-  )
-ExternalProject_Get_Property(fcmm source_dir)
-set(FCMM_INCLUDE_DIR ${source_dir})
-include_directories(${FCMM_INCLUDE_DIR})
+add_library(libfcmm INTERFACE)
+target_include_directories(libfcmm INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/third_party/fcmm)
 
 ExternalProject_Add(spdlog
     URL https://github.com/gabime/spdlog/archive/v1.15.1.tar.gz
@@ -177,8 +160,9 @@ ExternalProject_Add(spdlog
     LOG_DOWNLOAD ON
   )
 ExternalProject_Get_Property(spdlog source_dir)
-set(SPDLOG_INCLUDE_DIR ${source_dir}/include)
-include_directories(${SPDLOG_INCLUDE_DIR})
+add_library(libspdlog INTERFACE)
+add_dependencies(libspdlog spdlog)
+target_include_directories(libspdlog INTERFACE ${source_dir}/include)
 
 ExternalProject_Add(capnp
     URL https://capnproto.org/capnproto-c++-0.7.0.tar.gz
@@ -197,17 +181,9 @@ set(CMAKE_CXX_FLAGS_RELEASE "-gdwarf -DNDEBUG -O3")
 
 option(BUILD_DEPS_ONLY "Only fetch and build external dependencies" OFF)
 if(BUILD_DEPS_ONLY)
-  add_custom_target(dependencies ALL DEPENDS htslib rocksdb yaml-cpp CTPL fcmm spdlog capnp)
+  add_custom_target(dependencies ALL DEPENDS htslib rocksdb yaml-cpp spdlog capnp)
   return()
 endif()
-
-################################
-# Normal Libraries & Executables
-################################
-set(COMMON_INCLUDES ${PROJECT_SOURCE_DIR}/include)
-include_directories(${COMMON_INCLUDES} src)
-include_directories(${COMMON_INCLUDES} src/rocksdb/include)
-include_directories(${COMMON_INCLUDES} capnp/serialize)
 
 # Invoke cap'n proto IDL compiler, to generate C++ serialization code from
 # definitions.
@@ -237,26 +213,32 @@ add_library(glnexus
             include/RocksKeyValue.h src/RocksKeyValue.cc
             include/cli_utils.h src/cli_utils.cc
             test/utils.cc)
+target_compile_features(glnexus PUBLIC cxx_std_14)
+target_include_directories(glnexus
+  PUBLIC
+    $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
+  PRIVATE
+    src
+    src/rocksdb/include
+    capnp/serialize
+)
 add_dependencies(glnexus htslib)
 add_dependencies(glnexus rocksdb)
 add_dependencies(glnexus yaml-cpp)
-add_dependencies(glnexus CTPL)
-add_dependencies(glnexus fcmm)
-add_dependencies(glnexus spdlog)
 add_dependencies(glnexus capnp)
 add_library(libglnexus ALIAS glnexus)
 
 if(APPLE)
   set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -pthread -Wl,-U,_mallctl")
-  set(GLNEXUS_DEPS glnexus libhts librocksdb libyaml-cpp z snappy bz2 zstd lzma lz4 libcapnp.a libkj.a)
+  set(EXTERNAL_DEPS libhts librocksdb libyaml-cpp libctpl libfcmm libspdlog z snappy bz2 zstd lzma lz4 libcapnp.a libkj.a)
 else()
   set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${ARCH_FLAGS} -static-libstdc++ -pthread")
-  set(GLNEXUS_DEPS glnexus libhts librocksdb libyaml-cpp libz.a libsnappy.a libbz2.a libzstd.a liblzma.a librt.a libcapnp.a libkj.a m)
+  set(EXTERNAL_DEPS libhts librocksdb libyaml-cpp libctpl libfcmm libspdlog libz.a libsnappy.a libbz2.a libzstd.a liblzma.a librt.a libcapnp.a libkj.a m)
 endif()
+target_link_libraries(glnexus PUBLIC ${EXTERNAL_DEPS})
 
 add_executable(glnexus_cli cli/glnexus_cli.cc)
-add_dependencies(glnexus_cli libglnexus)
-target_link_libraries(glnexus_cli ${GLNEXUS_DEPS})
+target_link_libraries(glnexus_cli PRIVATE glnexus)
 
 install(TARGETS glnexus_cli DESTINATION bin)
 
@@ -274,7 +256,9 @@ ExternalProject_Add(catch
   LOG_DOWNLOAD ON
   )
 ExternalProject_Get_Property(catch source_dir)
-include_directories(${source_dir}/single_include)
+add_library(libcatch INTERFACE)
+add_dependencies(libcatch catch)
+target_include_directories(libcatch INTERFACE ${source_dir}/single_include)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused-function")
 add_executable(unit_tests
@@ -291,9 +275,7 @@ add_executable(unit_tests
                 test/unifier.cc
                 test/cli_utils.cc
                 test/cli.cc)
-add_dependencies(unit_tests catch)
-add_dependencies(unit_tests libglnexus)
-target_link_libraries(unit_tests ${GLNEXUS_DEPS})
+target_link_libraries(unit_tests PRIVATE glnexus libcatch)
 
 include(CTest)
 add_test(NAME unit_tests COMMAND ./unit_tests -d yes)

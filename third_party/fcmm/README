@@ -1,0 +1,71 @@
+Fast Concurrent Memoization Map (fcmm)
+http://projects.giacomodrago.com/fcmm
+
+
+fcmm is an almost lock-free concurrent hashmap, providing a limited set of
+functionalities:
+
+ - The map supports only find() and insert() operations: once an entry is inserted
+   into the map, it cannot be erased nor updated. The filter() method provides a way
+   to get a copy of the map containing only certain entries.
+
+ - The map can be iterated over with an InputIterator or a range-based for loop.
+
+ - The presence of duplicate keys into the map is avoided but the total absence
+   is not guaranteed. This is not an issue as long as it holds that:
+   if (k1, v1) and (k2, v2) are entries and k1 == k2, then v1 == v2.
+
+Due to its features, this data structure is fit to be used for memoization in
+concurrent environments.
+
+The map is implemented as a single C++ header file with no external dependencies.
+
+
+IMPORTANT NOTES:
+
+ - In order to compile fcmm, you'll need a C++11 compliant compiler
+    o Under GNU/Linux and Mac OS X, it successfully compiles with gcc 4.7.3 or better
+    o Under Windows, it successfully compiles with:
+        - Visual Studio 2013 Update 2
+        - MinGW-w64 (x64-4.8.1-posix-seh-rev2)
+    o When compiling with gcc, please remember to add the -std=c++11 command
+      line switch
+
+ - Before using fcmm in a given environment (CPU, Operating System, compiler,
+   etc...), compile and run test/correctness_test.cpp on that environment.
+   Please report test failures.
+   
+   
+DOCUMENTATION:
+
+ -  API documentation available at http://projects.giacomodrago.com/fcmm/doc/api
+
+
+PERFORMANCE CONSIDERATIONS AND BENCHMARKS:
+
+ - fcmm is "almost" lock-free, in the sense that system-wide progress is always
+   guaranteed except during map expansion, because of which all threads may block.
+
+ - When the map is expanded, it is not rehashed. A new, larger submap is allocated
+   but the previous submaps are still valid. This means that the more submaps are
+   allocated, the more time a lookup operation will take.
+
+ - For the above reasons, fcmm delivers its best performance if it never gets
+   expanded. Therefore, it's strongly recommended to provide fcmm with a reasonable
+   estimate of the number of entries the map will store.
+
+ - Collisions are resolved using open addressing with double hashing. To achieve
+   optimal performance, it's important to provide two different hash functions
+   that are completely independent.
+
+ - test/benchmark_tbb.cpp compares fcmm with tbb::concurrent_hash_map.
+   Actually, fcmm and tbb::concurrent_hash_map provide different features (e.g.
+   fcmm does not support erase and update) so the benchmark is not meant to be an
+   "absolute" comparison between the two.
+   fcmm may provide a better performance when:
+     o There is no need to delete or update the entries
+     o The map shall store a large number of entries and you can provide
+       a reasonable estimate of their number
+     o Values are relatively fast to compute
+     o Concurrency is high (4 threads or more)
+   If you are interested in some benchmarks, please see BENCHMARKS
