@@ -3,6 +3,8 @@
 .cache
 .cmake
 build/
+cmake-build-*/
+_deps/
 CMakeFiles/
 CMakeCache.txt
 cmake_install.cmake

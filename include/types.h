@@ -17,11 +17,7 @@
 #include <algorithm>
 #include <math.h>
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-// suppressed warnings due to use of deprecated auto_ptr in yaml-cpp
 #include "yaml-cpp/yaml.h"
-#pragma GCC diagnostic pop
 
 #define UNPAIR(p,nm1,nm2) const auto& nm1 = (p).first; const auto& nm2 = (p).second;
 template<typename T> inline void ignore_retval(T) {}

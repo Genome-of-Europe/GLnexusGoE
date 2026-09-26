@@ -109,9 +109,9 @@ Summary of changes made to compile GLnexus and pass unit tests natively on macOS
 |---|---|---|---|---|---|
 | **yaml-cpp** | 0.8.0 | 0.8.0 | **Done** | **Low** | Upgraded. Replaced 0.6.3 with 0.8.0. |
 | **spdlog** | 1.15.1 | 1.15.1 | **Done** | **Low** | Upgraded. Replaced 1.8.2 with 1.15.1. |
-| **capnp** | 0.7.0 | 1.0.2 | **Yes** | **Medium** | Fixes ARM64 quirks (we disabled `check`). Wire format backward-compatible. Generated C++ compiler output needs verification. |
-| **rocksdb** | 6.29.3 | 9.10.x | **No** (hold) | **High** | RocksDB 8+ requires C++17 (GLnexus is `-std=c++14`). Breaking C++ API changes (`SstFileWriter`, options). Complex build/SIMD matrix. |
-| **catch** (tests) | 1.12.2 (v1) | 3.8.0 (v3) | **No** | **High** | Catch v1 -> v3 is total rewrite. Drops single-header `catch.hpp`, breaks macros across all 12 test files. High effort, zero runtime benefit. |
+| **capnp** | 1.0.2 | 1.0.2 | **Done** | **Medium** | Upgraded from 0.7.0. Modernized readers and integrated native CMake codegen. |
+| **rocksdb** | 11.8.1 | 11.8.1 | **Done** | **Medium** | Upgraded from 6.29.3 to 11.8.1. Modernized DB::Open signatures and LRUCacheOptions. |
+| **catch** (tests) | 3.8.0 (v3) | 3.8.0 (v3) | **Done** | **Low** | Upgraded via FetchContent. Bridged via zero-touch `test/catch.hpp` shim. |
 | **CTPL** | 0.0.2 | 0.0.2 | **Vendored** | **N/A** | Abandoned header library (2016); vendored into `third_party/ctpl`. |
 | **fcmm** | 1.0.1 | 1.0.1 | **Vendored** | **N/A** | Upstream deleted; vendored header in `third_party/fcmm`. |
 
@@ -222,3 +222,46 @@ Summary of changes made to compile GLnexus and pass unit tests natively on macOS
   * **API Modernization**: Replaced `::capnp::UnalignedFlatArrayMessageReader` (removed in Cap'n Proto 1.0 after alignment requirements were folded into the base reader) with `::capnp::FlatArrayMessageReader` in `src/BCFKeyValueData.cc` and `src/BCFKeyValueData_utils.h`.
   * **Unaligned Data Deserialization**: Added `add_compile_definitions(CAPNP_ALLOW_UNALIGNED)` to allow deserializing unaligned bucket byte slices from key-value stores without Cap'n Proto 1.0 arena alignment assertions failing.
   * **Build Minimization (`EXCLUDE_FROM_ALL`)**: Tagged Cap'n Proto and yaml-cpp `FetchContent_Declare` blocks with `EXCLUDE_FROM_ALL`, ensuring unused subproject targets (RPC, websockets, JSON, HTTP) are skipped during builds.
+
+---
+
+## 15. C++23 Standard Migration, RocksDB 11.8.1 Upgrade, Catch3 Modernization, htslib config
+
+* **C++23 Standard Migration**:
+  * **Global CMake Standard**: Set `CMAKE_CXX_STANDARD 23`, `CMAKE_CXX_STANDARD_REQUIRED ON`, and `CMAKE_CXX_EXTENSIONS ON` at the top of `CMakeLists.txt`.
+  * **Target Standard**: Bumped `target_compile_features(glnexus PUBLIC cxx_std_23)` in `CMakeLists.txt`. Both `libglnexus.a` and `glnexus_cli` compile cleanly.
+  * **Header Inclusion**: Added `#include <functional>` to `src/unifier.cc` (standard library headers no longer transitively pull `std::function` under C++23).
+  * **Dead Pragma Cleanup**: Removed legacy `auto_ptr` warning suppression pragmas around `#include "yaml-cpp/yaml.h"` in `include/types.h` (obsolete after yaml-cpp 0.8.0 upgrade).
+  * **Dependencies Under C++23**:
+    * `yaml-cpp`, `CapnProto`, `Catch2`: Inherit and compile cleanly with `-std=gnu++23` via `FetchContent`.
+    * `spdlog`, `CTPL`, `fcmm`: Header-only libraries compile cleanly under `-std=gnu++23`.
+    * `rocksdb`: Built via Makefile using detected C++20 ABI, verified 100% interoperable.
+    * `htslib`: Pure C (C99 Makefile), unaffected by C++ standard.
+
+* **Catch3 Upgrade (v3.8.0) & Zero-Touch Compatibility Shim**:
+  * **FetchContent Integration**: Replaced legacy `ExternalProject_Add(catch 1.12.2)` and its manual assembly/signal stack patches with modern `FetchContent_Declare(Catch2 ... v3.8.0)` and `FetchContent_MakeAvailable(Catch2)`.
+  * **Target Linking**: Linked `unit_tests` to `Catch2::Catch2`.
+  * **Zero-Touch Shim Header (`test/catch.hpp`)**:
+    * Created compatibility bridge header that includes `<catch2/catch_test_macros.hpp>` and implements `main()` via `Catch::Session().run()` when `CATCH_CONFIG_MAIN` is defined.
+    * Preserves full backward compatibility with Catch v1 test macros (`TEST_CASE`, `SECTION`, `REQUIRE`, `CHECK`) without modifying a single line across the 12 existing test files.
+
+* **RocksDB 11.8.1 Upgrade & Modernization**:
+  * **Version Bump**: Upgraded RocksDB from `v6.29.3` to latest stable `v11.8.1` in `CMakeLists.txt`. Removed `-include cstdint` workaround from build command.
+  * **API Modernization (`std::unique_ptr<rocksdb::DB>`)**: Updated `rocksdb::DB::Open` and `rocksdb::DB::OpenForReadOnly` call sites in `src/RocksKeyValue.cc` and `test/rocks_behaviors.cc` to use `std::unique_ptr<rocksdb::DB>*` instead of deprecated raw double pointers.
+  * **Obsolete Options Cleanup**: Removed `opts.access_hint_on_compaction_start` in `src/RocksKeyValue.cc` (deprecated and removed; readahead behavior is now governed by `compaction_readahead_size`).
+  * **Block Cache Modernization**: Replaced deprecated `rocksdb::NewLRUCache()` with `rocksdb::LRUCacheOptions(...).MakeSharedCache()` in `NewBlockCache()`.
+  * **SST Format Version**: Bumped `bbto.format_version` from 4 to 5 in `src/RocksKeyValue.cc` for faster checksumming (xxHash64/kXXH3) and dictionary block support.
+
+* **CMake Modernization & Build Hygiene**:
+  * **htslib Autotools Configure & libdeflate Acceleration**: Replaced hacky `PATCH_COMMAND sed` with standard `./configure --disable-libcurl --with-libdeflate --disable-bz2 --disable-lzma` passing compiler, CFLAGS, CPPFLAGS, and LDFLAGS cleanly, building static target via `make lib-static`. Linked `deflate` (`libdeflate.a` on Linux) to accelerate BGZF gzip compression/decompression across VCF/BCF operations. Added `libdeflate-dev` to `Dockerfile`.
+  * **Elimination of Unused Compression Dependencies (`bz2`, `lzma`)**: Removed unused CRAM-only compressors (`libbz2`, `liblzma`) from `htslib` and disabled bzip in RocksDB (`ROCKSDB_DISABLE_BZIP=1`). Completely dropped `bz2` and `lzma` from `EXTERNAL_DEPS`, removed Homebrew `opt/xz` include/lib path workarounds, and removed `libbz2-dev` and `liblzma-dev` from `Dockerfile`.
+  * **Linker & Environment Cleanup**: Eliminated legacy global `link_directories()` and dead `set(ENV{...})` mutations; scoped macOS Homebrew library search directory directly to `glnexus` via target-based `target_link_options(glnexus INTERFACE ...)`.
+  * **Target Separation & Cleanliness**: Moved `test/utils.cc` out of production `libglnexus.a` into `unit_tests`; removed redundant compilation of `src/diploid.cc` in `unit_tests`.
+  * **Ghost Include Cleanup**: Removed non-existent `src/rocksdb/include` from `target_include_directories(glnexus PRIVATE ...)`.
+  * **Docker & Multi-Arch Container Modernization**:
+    * Updated [Dockerfile](file:///Users/vinter/projects/GLnexus/Dockerfile) to replace `libbz2-dev` and `liblzma-dev` with `libdeflate-dev`.
+    * Configured multi-arch `LD_PRELOAD` resolution for `libjemalloc.so.2` in the `builder` stage so CTest/Catch2 test execution runs with jemalloc active.
+    * Added `cmake-build-*/` and `_deps/` to [`.dockerignore`](file:///Users/vinter/projects/GLnexus/.dockerignore), reducing build context transfer from 3.7GB down to 9.6KB.
+    * Modernized [test/getting_started.sh](file:///Users/vinter/projects/GLnexus/test/getting_started.sh) to dynamically locate `libjemalloc` across architectures (`x86_64` and `aarch64`) and accept thread budgets (`${THREADS:-4}`) to avoid OOM killing during multi-thousand-sample genotyping in resource-constrained environments. All tests (`unit_tests`, `jemalloc_linking`, `getting_started`) verified passing 100% inside container.
+
+

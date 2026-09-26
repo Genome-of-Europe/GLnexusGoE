@@ -20,7 +20,7 @@ TEST_CASE("Basic operations on RocksDB") {
   // Remove the files under the DB path
   REQUIRE(system(("rm -rf " + kDBPath).c_str()) == 0);
 
-  DB* db;
+  std::unique_ptr<DB> db;
   Options options;
 
   // create the DB if it's not already present
@@ -95,7 +95,7 @@ TEST_CASE("Basic operations on RocksDB") {
   }
   
   delete coll;
-  delete db;
+  db.reset();
 
   // destroy the database, so we can reuse the path
   DestroyDB(kDBPath, options);

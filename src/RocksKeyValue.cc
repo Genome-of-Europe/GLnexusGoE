@@ -95,13 +95,17 @@ static Status convertStatus(const rocksdb::Status &s)
 // Create RocksDB block cache to be shared among all collections in one database
 std::shared_ptr<rocksdb::Cache> NewBlockCache(OpenMode mode, size_t mem_budget) {
     assert(mem_budget >= size_t(1<<30));
+    rocksdb::LRUCacheOptions opts;
     if (mode != OpenMode::BULK_LOAD) {
-        return rocksdb::NewLRUCache(mem_budget * 3 / 4, 8);
+        opts.capacity = mem_budget * 3 / 4;
+        opts.num_shard_bits = 8;
     } else {
         // In bulk-load mode we use a lot of memory for write buffers, so
         // provision a smaller block cache to compensate.
-        return rocksdb::NewLRUCache(mem_budget / 4, 6);
+        opts.capacity = mem_budget / 4;
+        opts.num_shard_bits = 6;
     }
+    return opts.MakeSharedCache();
 }
 
 // Reference for RocksDB tuning: https://github.com/facebook/rocksdb/wiki/RocksDB-Tuning-Guide
@@ -122,7 +126,7 @@ void ApplyColumnFamilyOptions(OpenMode mode, size_t prefix_length, size_t mem_bu
 
     // 1MiB blocks, with a large sharded cache
     rocksdb::BlockBasedTableOptions bbto;
-    bbto.format_version = 4;
+    bbto.format_version = 5;
     bbto.block_size = 1024 * 1024;
     bbto.block_cache = block_cache;
     // RocksDB index & filter blocks use significant amounts of memory
@@ -202,7 +206,6 @@ void ApplyDBOptions(OpenMode mode, size_t mem_budget, size_t thread_budget,
     opts.env->SetBackgroundThreads(opts.max_background_jobs, rocksdb::Env::LOW);
     opts.env->SetBackgroundThreads(opts.max_background_jobs, rocksdb::Env::HIGH);
 
-    opts.access_hint_on_compaction_start = rocksdb::Options::AccessHint::SEQUENTIAL;
     opts.compaction_readahead_size = 16 << 20;
 
     // legacy issue -- feature not supported by the memtable implemetations we select
@@ -393,7 +396,7 @@ public:
         options.create_if_missing = true;
         options.error_if_exists = true;
 
-        rocksdb::DB *rawdb = nullptr;
+        std::unique_ptr<rocksdb::DB> rawdb;
         rocksdb::Status s = rocksdb::DB::Open(options, dbPath, &rawdb);
         if (!s.ok()) {
             return convertStatus(s);
@@ -401,9 +404,8 @@ public:
         assert(rawdb != nullptr);
 
         std::map<const std::string, rocksdb::ColumnFamilyHandle*> coll2handle;
-        db.reset(new DB(rawdb, coll2handle, opt.mode, opt.pfx, mem_budget, block_cache));
+        db.reset(new DB(rawdb.release(), coll2handle, opt.mode, opt.pfx, mem_budget, block_cache));
         if (!db) {
-            delete rawdb;
             return Status::Failure();
         }
         return Status::OK();
@@ -439,7 +441,7 @@ public:
         }
 
         // open the database (all column families)
-        rocksdb::DB *rawdb = nullptr;
+        std::unique_ptr<rocksdb::DB> rawdb;
         std::vector<rocksdb::ColumnFamilyHandle*> column_family_handles;
 
         if (opt.mode == OpenMode::READ_ONLY) {
@@ -459,12 +461,11 @@ public:
         for (size_t i = 0; i < column_families.size(); i++) {
             coll2handle[column_family_names[i]] = column_family_handles[i];
         }
-        db.reset(new DB(rawdb, coll2handle, opt.mode, opt.pfx, mem_budget, block_cache));
+        db.reset(new DB(rawdb.release(), coll2handle, opt.mode, opt.pfx, mem_budget, block_cache));
         if (!db) {
             for (auto h : column_family_handles) {
                 delete h;
             }
-            delete rawdb;
             return Status::Failure();
         }
 

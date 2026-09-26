@@ -23,6 +23,9 @@ if(ENABLE_COVERAGE)
 endif()
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS ON)
 
 project(GLnexus)
 
@@ -36,10 +39,6 @@ if(NOT NUM_CORES OR NUM_CORES LESS 1)
   set(NUM_CORES 4)
 endif()
 
-link_directories(${CMAKE_BINARY_DIR}/external/lib)
-set(ENV{PATH} ${CMAKE_BINARY_DIR}/external/bin:$ENV{PATH})
-set(ENV{PKG_CONFIG_PATH} ${CMAKE_BINARY_DIR}/external/lib/pkgconfig)
-
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
   set(ARCH_FLAGS "-march=ivybridge")
   set(ROCKSDB_ARCH_OPT "-march=ivybridge -msse4.2 -DHAVE_SSE42 -mpclmul")
@@ -51,7 +50,9 @@ endif()
 if(APPLE)
   find_program(BREW_BIN brew)
   if(BREW_BIN)
-    execute_process(COMMAND ${BREW_BIN} --prefix OUTPUT_VARIABLE BREW_PREFIX OUTPUT_STRIP_TRAILING_WHITESPACE)
+    execute_process(COMMAND ${BREW_BIN} --prefix
+                    OUTPUT_VARIABLE BREW_PREFIX
+                    OUTPUT_STRIP_TRAILING_WHITESPACE)
   elseif(EXISTS "/opt/homebrew")
     set(BREW_PREFIX "/opt/homebrew")
   elseif(EXISTS "/usr/local")
@@ -60,13 +61,14 @@ if(APPLE)
 
   if(BREW_PREFIX)
     list(APPEND CMAKE_PREFIX_PATH "${BREW_PREFIX}")
-    link_directories("${BREW_PREFIX}/lib")
-    set(HTSLIB_EXTRA_CFLAGS "-I${BREW_PREFIX}/opt/xz/include -I${BREW_PREFIX}/include")
+    set(HTSLIB_EXTRA_CFLAGS "-I${BREW_PREFIX}/include")
+    set(HTSLIB_EXTRA_LDFLAGS "-L${BREW_PREFIX}/lib")
     set(ROCKSDB_EXTRA_CXXFLAGS "-I${BREW_PREFIX}/include")
     set(ROCKSDB_EXTRA_LDFLAGS "-L${BREW_PREFIX}/lib")
   endif()
 else()
   set(HTSLIB_EXTRA_CFLAGS "")
+  set(HTSLIB_EXTRA_LDFLAGS "")
   set(ROCKSDB_EXTRA_CXXFLAGS "")
   set(ROCKSDB_EXTRA_LDFLAGS "")
 endif()
@@ -93,10 +95,17 @@ include(FetchContent)
 ExternalProject_Add(htslib
     URL https://github.com/samtools/htslib/releases/download/1.24/htslib-1.24.tar.bz2
     PREFIX ${CMAKE_CURRENT_BINARY_DIR}/external
-    CONFIGURE_COMMAND ""
-    PATCH_COMMAND sed -i.bak -e "s|^CFLAGS .*$|CFLAGS = -gdwarf -O3 -DNDEBUG ${ARCH_FLAGS} ${HTSLIB_EXTRA_CFLAGS}|" -e "s|^NONCONFIGURE_OBJS =.*$|NONCONFIGURE_OBJS =|" -e "s|echo '#define HAVE_LIBCURL 1' >> \\$@||" Makefile
     BUILD_IN_SOURCE 1
-    BUILD_COMMAND bash -c "make -n libhts.a && make -j${NUM_CORES} libhts.a"
+    CONFIGURE_COMMAND ./configure
+        --disable-libcurl
+        --with-libdeflate
+        --disable-bz2
+        --disable-lzma
+        CC=${CMAKE_C_COMPILER}
+        CFLAGS=-gdwarf\ -O3\ -DNDEBUG\ ${ARCH_FLAGS}
+        CPPFLAGS=${HTSLIB_EXTRA_CFLAGS}
+        LDFLAGS=${HTSLIB_EXTRA_LDFLAGS}
+    BUILD_COMMAND make -j${NUM_CORES} lib-static
     INSTALL_COMMAND ""
     LOG_DOWNLOAD ON
     LOG_BUILD ON
@@ -114,11 +123,18 @@ set_target_properties(libhts PROPERTIES
 # RocksDB
 # Warning: DISABLE_JEMALLOC=1 avoids link-time jemalloc dependency (LD_PRELOAD at runtime).
 ExternalProject_Add(rocksdb
-    URL https://github.com/facebook/rocksdb/archive/v6.29.3.tar.gz
+    URL https://github.com/facebook/rocksdb/archive/v11.8.1.tar.gz
     PREFIX ${CMAKE_CURRENT_BINARY_DIR}/external
     CONFIGURE_COMMAND ""
     BUILD_IN_SOURCE 1
-    BUILD_COMMAND bash -c "export PORTABLE=1 && export DISABLE_JEMALLOC=1 && export OPT='-DNDEBUG -O3 ${ROCKSDB_ARCH_OPT} -DROCKSDB_NO_DYNAMIC_EXTENSION' && export EXTRA_CXXFLAGS='-include cstdint -Wno-error ${ROCKSDB_EXTRA_CXXFLAGS}' && export EXTRA_LDFLAGS='${ROCKSDB_EXTRA_LDFLAGS}' && make -n static_lib && make -j${NUM_CORES} static_lib"
+    BUILD_COMMAND bash -c "export PORTABLE=1 \
+        && export DISABLE_JEMALLOC=1 \
+        && export ROCKSDB_DISABLE_BZIP=1 \
+        && export OPT='-DNDEBUG -O3 ${ROCKSDB_ARCH_OPT} -DROCKSDB_NO_DYNAMIC_EXTENSION' \
+        && export EXTRA_CXXFLAGS='-Wno-error ${ROCKSDB_EXTRA_CXXFLAGS}' \
+        && export EXTRA_LDFLAGS='${ROCKSDB_EXTRA_LDFLAGS}' \
+        && make -n static_lib \
+        && make -j${NUM_CORES} static_lib"
     INSTALL_COMMAND ""
     LOG_DOWNLOAD ON
     LOG_BUILD ON
@@ -154,7 +170,10 @@ FetchContent_Declare(
     spdlog
     URL https://github.com/gabime/spdlog/archive/v1.15.1.tar.gz
     URL_HASH SHA256=25c843860f039a1600f232c6eb9e01e6627f7d030a2ae5e232bdd3c9205d26cc
-    PATCH_COMMAND sed -i.bak -e "s|str(S())|str(S{})|g" -e "s|string_view(S())|string_view(S{})|g" include/spdlog/fmt/bundled/base.h
+    PATCH_COMMAND sed -i.bak
+        -e "s|str(S())|str(S{})|g"
+        -e "s|string_view(S())|string_view(S{})|g"
+        include/spdlog/fmt/bundled/base.h
 )
 FetchContent_GetProperties(spdlog)
 if(NOT spdlog_POPULATED)
@@ -209,10 +228,9 @@ add_library(glnexus
             include/BCFKeyValueData.h src/BCFKeyValueData.cc
             include/BCF_utils.h src/BCF_utils.cc
             include/RocksKeyValue.h src/RocksKeyValue.cc
-            include/cli_utils.h src/cli_utils.cc
-            test/utils.cc)
+            include/cli_utils.h src/cli_utils.cc)
 
-target_compile_features(glnexus PUBLIC cxx_std_14)
+target_compile_features(glnexus PUBLIC cxx_std_23)
 target_compile_definitions(glnexus PUBLIC
     GIT_REVISION=\"${GIT_REVISION}\"
 )
@@ -235,18 +253,21 @@ target_include_directories(glnexus
     $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
   PRIVATE
     src
-    src/rocksdb/include
     ${CMAKE_CURRENT_BINARY_DIR}
 )
 add_dependencies(glnexus htslib rocksdb)
 add_library(libglnexus ALIAS glnexus)
 
 if(APPLE)
-  target_link_options(glnexus INTERFACE -pthread -Wl,-U,_mallctl)
-  set(EXTERNAL_DEPS libhts librocksdb libyaml-cpp libctpl libfcmm libspdlog z snappy bz2 zstd lzma lz4 CapnProto::capnp)
+  target_link_options(glnexus INTERFACE -pthread -Wl,-U,_mallctl $<$<BOOL:${BREW_PREFIX}>:-L${BREW_PREFIX}/lib>)
+  set(EXTERNAL_DEPS
+      libhts librocksdb libyaml-cpp libctpl libfcmm libspdlog
+      z deflate snappy zstd lz4 CapnProto::capnp)
 else()
   target_link_options(glnexus INTERFACE ${ARCH_FLAGS} -static-libstdc++ -pthread)
-  set(EXTERNAL_DEPS libhts librocksdb libyaml-cpp libctpl libfcmm libspdlog libz.a libsnappy.a libbz2.a libzstd.a liblzma.a librt.a CapnProto::capnp m)
+  set(EXTERNAL_DEPS
+      libhts librocksdb libyaml-cpp libctpl libfcmm libspdlog
+      libz.a libdeflate.a libsnappy.a libzstd.a librt.a CapnProto::capnp m)
 endif()
 target_link_libraries(glnexus PUBLIC ${EXTERNAL_DEPS})
 
@@ -264,22 +285,16 @@ install(TARGETS glnexus_cli DESTINATION bin)
 include(CTest)
 
 if(BUILD_TESTING)
-  ExternalProject_Add(catch
-    URL https://github.com/philsquared/Catch/archive/v1.12.2.zip
-    PREFIX ${CMAKE_CURRENT_BINARY_DIR}/external
-    CONFIGURE_COMMAND ""
-    PATCH_COMMAND sed -i.bak -e "s|__asm__(\"int \\$3\\\\n\" : : /\\* NOLINT \\*/ )|__builtin_debugtrap()|" -e "s|altStackMem\\[SIGSTKSZ\\]|altStackMem[32768]|g" -e "s|sigStack.ss_size = SIGSTKSZ|sigStack.ss_size = sizeof(altStackMem)|g" single_include/catch.hpp
-    BUILD_COMMAND ""
-    INSTALL_COMMAND ""
-    LOG_DOWNLOAD ON
+  FetchContent_Declare(
+      Catch2
+      URL https://github.com/catchorg/Catch2/archive/v3.8.0.tar.gz
+      URL_HASH SHA256=1ab2de20460d4641553addfdfe6acd4109d871d5531f8f519a52ea4926303087
+      EXCLUDE_FROM_ALL
   )
-  ExternalProject_Get_Property(catch source_dir)
-  add_library(libcatch INTERFACE)
-  add_dependencies(libcatch catch)
-  target_include_directories(libcatch INTERFACE ${source_dir}/single_include)
+  FetchContent_MakeAvailable(Catch2)
 
   add_executable(unit_tests
-                  src/diploid.cc test/diploid.cc
+                  test/diploid.cc
                   test/unit_tests.cc
                   test/htslib_behaviors.cc
                   test/rocks_behaviors.cc
@@ -291,11 +306,14 @@ if(BUILD_TESTING)
                   test/rocks_integration.cc
                   test/unifier.cc
                   test/cli_utils.cc
-                  test/cli.cc)
+                  test/cli.cc
+                  test/utils.cc)
   target_compile_options(unit_tests PRIVATE -Wno-unused-function)
-  target_link_libraries(unit_tests PRIVATE glnexus libcatch)
+  target_link_libraries(unit_tests PRIVATE glnexus Catch2::Catch2)
 
-  add_test(NAME unit_tests WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" COMMAND $<TARGET_FILE:unit_tests> -d yes)
+  add_test(NAME unit_tests
+           WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
+           COMMAND $<TARGET_FILE:unit_tests> -d yes)
   if(NOT APPLE)
     add_test(NAME jemalloc_warning COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test/jemalloc_linking.sh)
     add_test(NAME getting_started COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test/getting_started.sh)

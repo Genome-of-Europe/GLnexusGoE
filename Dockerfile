@@ -10,7 +10,7 @@ RUN apt-get -qq update && \
     apt-get -qq install -y --no-install-recommends --no-install-suggests \
     curl wget ca-certificates git-core less netbase \
     g++ cmake autoconf make file \
-    libjemalloc-dev libzip-dev libsnappy-dev libbz2-dev zlib1g-dev liblzma-dev libzstd-dev \
+    libjemalloc-dev libzip-dev libsnappy-dev zlib1g-dev libzstd-dev libdeflate-dev \
     python3-vcf bcftools pv
 
 WORKDIR /GLnexus
@@ -23,6 +23,8 @@ RUN cmake -DBUILD_DEPS_ONLY=ON -DCMAKE_BUILD_TYPE=$build_type . && make -j$(npro
 
 # Stage 2: Compile GLnexus application code & tests
 FROM dependencies AS builder
+RUN ln -s /usr/lib/*-linux-gnu/libjemalloc.so /usr/local/lib/libjemalloc.so.2 2>/dev/null || ln -s /usr/lib/*-linux-gnu/libjemalloc.so.2 /usr/local/lib/libjemalloc.so.2
+ENV LD_PRELOAD=/usr/local/lib/libjemalloc.so.2
 COPY . /GLnexus
 RUN cmake -DBUILD_DEPS_ONLY=OFF -DCMAKE_BUILD_TYPE=$build_type . && make -j$(nproc)
 CMD ["ctest", "-V"]

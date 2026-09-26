@@ -16,9 +16,16 @@ fi
 rm -rf /tmp/dv_1000G_ALDH2_gvcf/ GLnexus.DB/
 tar xf /tmp/dv_1000G_ALDH2_gvcf.tar -C /tmp
 
-export LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libjemalloc.so  # needed to keep memory usage under control in Travis CI
+if [ -z "${LD_PRELOAD:-}" ]; then
+    for p in /usr/local/lib/libjemalloc.so.2 /usr/lib/*-linux-gnu/libjemalloc.so /usr/lib/*-linux-gnu/libjemalloc.so.2 /opt/homebrew/lib/libjemalloc.dylib; do
+        if [ -f "$p" ]; then
+            export LD_PRELOAD="$p"
+            break
+        fi
+    done
+fi
 echo -e "chr12\t111760000\t111820000" > /tmp/dv_1000G_ALDH2_gvcf/ALDH2.bed
-time $HERE/../glnexus_cli --config DeepVariant --squeeze --bed /tmp/dv_1000G_ALDH2_gvcf/ALDH2.bed --mem-gbytes 1 \
+time $HERE/../glnexus_cli --config DeepVariant --squeeze --bed /tmp/dv_1000G_ALDH2_gvcf/ALDH2.bed --mem-gbytes 1 --threads ${THREADS:-4} \
     /tmp/dv_1000G_ALDH2_gvcf/*.g.vcf.gz | bcftools view | pv -Wni 10 -s 84968191 > /tmp/dv_1000G_ALDH2_gvcf/dv_1000G_ALDH2.vcf
 
 echo "--- Getting Started examples OK"
