@@ -469,7 +469,7 @@ static Status ScanBCFBucket(const range& bucket, const string& dataset,
     }
     #endif
     try {
-        ::capnp::UnalignedFlatArrayMessageReader message(kj::ArrayPtr<const ::capnp::word>((::capnp::word*)data.data, data.size / sizeof(::capnp::word)));
+        ::capnp::FlatArrayMessageReader message(kj::ArrayPtr<const ::capnp::word>((::capnp::word*)data.data, data.size / sizeof(::capnp::word)));
         capnp::BCFBucket::Reader bucket_reader = message.getRoot<capnp::BCFBucket>();
 
         // Scan: begin at a position informed by the 'skip index'

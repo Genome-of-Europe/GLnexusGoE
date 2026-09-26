@@ -103,6 +103,7 @@ ExternalProject_Add(htslib
   )
 ExternalProject_Get_Property(htslib source_dir)
 set(HTSLIB_INCLUDE_DIR ${source_dir}/htslib ${source_dir})
+file(MAKE_DIRECTORY ${HTSLIB_INCLUDE_DIR})
 ExternalProject_Get_Property(htslib binary_dir)
 add_library(libhts STATIC IMPORTED)
 set(LIBHTS_A ${binary_dir}/libhts.a)
@@ -124,6 +125,7 @@ ExternalProject_Add(rocksdb
   )
 ExternalProject_Get_Property(rocksdb source_dir)
 set(ROCKSDB_INCLUDE_DIR ${source_dir}/include ${source_dir})
+file(MAKE_DIRECTORY ${ROCKSDB_INCLUDE_DIR})
 ExternalProject_Get_Property(rocksdb binary_dir)
 add_library(librocksdb STATIC IMPORTED)
 set(LIBROCKSDB_A ${binary_dir}/librocksdb.a)
@@ -142,6 +144,7 @@ FetchContent_Declare(
     yaml-cpp
     URL https://github.com/jbeder/yaml-cpp/archive/0.8.0.tar.gz
     URL_HASH SHA256=fbe74bbdcee21d656715688706da3c8becfd946d92cd44705cc6098bb23b3a16
+    EXCLUDE_FROM_ALL
 )
 FetchContent_MakeAvailable(yaml-cpp)
 add_library(libyaml-cpp ALIAS yaml-cpp)
@@ -161,36 +164,35 @@ add_library(libspdlog INTERFACE)
 target_include_directories(libspdlog INTERFACE ${spdlog_SOURCE_DIR}/include)
 
 # capnproto
-ExternalProject_Add(capnp
-    URL https://capnproto.org/capnproto-c++-0.7.0.tar.gz
-    PREFIX ${CMAKE_CURRENT_BINARY_DIR}/external
-    CONFIGURE_COMMAND ./configure --prefix=${CMAKE_BINARY_DIR}/external
-    BUILD_IN_SOURCE 1
-    BUILD_COMMAND bash -c "make -j${NUM_CORES}"
-    INSTALL_COMMAND make install
-    LOG_DOWNLOAD ON
-  )
+set(WITH_OPENSSL OFF CACHE INTERNAL "")
+set(BUILD_TESTING OFF)
+add_compile_definitions(CAPNP_ALLOW_UNALIGNED)
+FetchContent_Declare(
+    CapnProto
+    URL https://capnproto.org/capnproto-c++-1.0.2.tar.gz
+    URL_HASH SHA256=9057dbc0223366b74bbeca33a05de164a229b0377927f1b7ef3828cdd8cb1d7e
+    EXCLUDE_FROM_ALL
+)
+FetchContent_MakeAvailable(CapnProto)
+set(BUILD_TESTING ON CACHE BOOL "Build the testing tree" FORCE)
 
 option(BUILD_DEPS_ONLY "Only fetch and build external dependencies" OFF)
 if(BUILD_DEPS_ONLY)
-  add_custom_target(dependencies ALL DEPENDS htslib rocksdb capnp)
+  add_custom_target(dependencies ALL DEPENDS htslib rocksdb)
   return()
 endif()
 
 # ==============================================================================
 # 5. Code Generation (Cap'n Proto)
 # ==============================================================================
-add_custom_command(
-  OUTPUT  capnp/serialize/defs.capnp.c++ capnp/serialize/defs.capnp.h
-  COMMAND ${CMAKE_BINARY_DIR}/external/bin/capnp compile -I${CMAKE_CURRENT_BINARY_DIR}/external/include -oexternal/bin/capnpc-c++ capnp/serialize/defs.capnp
-  DEPENDS capnp/serialize/defs.capnp
-  COMMENT "GLnexus: generating cap'n proto C++ and H files")
+set(CAPNPC_SRC_PREFIX "${CMAKE_CURRENT_SOURCE_DIR}/capnp/serialize")
+capnp_generate_cpp(CAPNP_SRCS CAPNP_HDRS "${CMAKE_CURRENT_SOURCE_DIR}/capnp/serialize/defs.capnp")
 
 # ==============================================================================
 # 6. Core Library (glnexus)
 # ==============================================================================
 add_library(glnexus
-            capnp/serialize/defs.capnp.h capnp/serialize/defs.capnp.c++
+            ${CAPNP_SRCS} ${CAPNP_HDRS}
             include/types.h src/types.cc
             include/data.h src/data.cc
             include/compare_queries.h src/compare_queries.cc
@@ -234,18 +236,17 @@ target_include_directories(glnexus
   PRIVATE
     src
     src/rocksdb/include
-    capnp/serialize
-    ${CMAKE_BINARY_DIR}/external/include
+    ${CMAKE_CURRENT_BINARY_DIR}
 )
-add_dependencies(glnexus htslib rocksdb capnp)
+add_dependencies(glnexus htslib rocksdb)
 add_library(libglnexus ALIAS glnexus)
 
 if(APPLE)
   target_link_options(glnexus INTERFACE -pthread -Wl,-U,_mallctl)
-  set(EXTERNAL_DEPS libhts librocksdb libyaml-cpp libctpl libfcmm libspdlog z snappy bz2 zstd lzma lz4 libcapnp.a libkj.a)
+  set(EXTERNAL_DEPS libhts librocksdb libyaml-cpp libctpl libfcmm libspdlog z snappy bz2 zstd lzma lz4 CapnProto::capnp)
 else()
   target_link_options(glnexus INTERFACE ${ARCH_FLAGS} -static-libstdc++ -pthread)
-  set(EXTERNAL_DEPS libhts librocksdb libyaml-cpp libctpl libfcmm libspdlog libz.a libsnappy.a libbz2.a libzstd.a liblzma.a librt.a libcapnp.a libkj.a m)
+  set(EXTERNAL_DEPS libhts librocksdb libyaml-cpp libctpl libfcmm libspdlog libz.a libsnappy.a libbz2.a libzstd.a liblzma.a librt.a CapnProto::capnp m)
 endif()
 target_link_libraries(glnexus PUBLIC ${EXTERNAL_DEPS})
 
@@ -294,9 +295,9 @@ if(BUILD_TESTING)
   target_compile_options(unit_tests PRIVATE -Wno-unused-function)
   target_link_libraries(unit_tests PRIVATE glnexus libcatch)
 
-  add_test(NAME unit_tests COMMAND ./unit_tests -d yes)
+  add_test(NAME unit_tests WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" COMMAND $<TARGET_FILE:unit_tests> -d yes)
   if(NOT APPLE)
-    add_test(NAME jemalloc_warning COMMAND test/jemalloc_linking.sh)
-    add_test(NAME getting_started COMMAND test/getting_started.sh)
+    add_test(NAME jemalloc_warning COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test/jemalloc_linking.sh)
+    add_test(NAME getting_started COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test/getting_started.sh)
   endif()
 endif()

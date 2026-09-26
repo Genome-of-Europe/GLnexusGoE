@@ -205,3 +205,20 @@ Summary of changes made to compile GLnexus and pass unit tests natively on macOS
 * **Platform Concurrency & Build Hygiene**:
   * Replaced remnant `make -j$(nproc)` in `rocksdb` build command with portable `-j${NUM_CORES}`.
   * Streamlined `dependencies` and `add_dependencies(glnexus ...)` targets by removing native CMake targets now tracked automatically by the build graph.
+
+---
+
+## 14. Out-of-Source Build Support & Cap'n Proto 1.0.2 Upgrade
+
+* **Out-of-Source & IDE Support (CLion / `cmake -B`)**:
+  * **Directory Validation Fix**: Added `file(MAKE_DIRECTORY ...)` for imported target include paths (`htslib`, `rocksdb`) so CMake's generation step does not fail before external tarballs are extracted.
+  * **Build Tree Isolation**: Added `build/` and `cmake-build-*/` to `.gitignore` to support default IDE and out-of-source build directories while keeping the repository root clean.
+  * **Test Working Directory Fix**: Configured CTest `unit_tests` with `WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"` and `$<TARGET_FILE:unit_tests>` so fixture data in `test/data/` resolves properly across out-of-source builds.
+
+* **Cap'n Proto 1.0.2 Upgrade & Modern CMake Integration**:
+  * **FetchContent Migration**: Migrated from legacy `ExternalProject_Add` (Cap'n Proto 0.7.0 with custom `./configure && make`) to `FetchContent_Declare` with Cap'n Proto 1.0.2 and SHA-256 verification.
+  * **Native Code Generation**: Replaced custom `capnp compile` shell commands with Cap'n Proto's official `capnp_generate_cpp()` macro, outputting generated headers and source files cleanly into `${CMAKE_CURRENT_BINARY_DIR}`.
+  * **Target-Based Linking**: Replaced hardcoded static library names (`libcapnp.a`, `libkj.a`) with the official `CapnProto::capnp` target.
+  * **API Modernization**: Replaced `::capnp::UnalignedFlatArrayMessageReader` (removed in Cap'n Proto 1.0 after alignment requirements were folded into the base reader) with `::capnp::FlatArrayMessageReader` in `src/BCFKeyValueData.cc` and `src/BCFKeyValueData_utils.h`.
+  * **Unaligned Data Deserialization**: Added `add_compile_definitions(CAPNP_ALLOW_UNALIGNED)` to allow deserializing unaligned bucket byte slices from key-value stores without Cap'n Proto 1.0 arena alignment assertions failing.
+  * **Build Minimization (`EXCLUDE_FROM_ALL`)**: Tagged Cap'n Proto and yaml-cpp `FetchContent_Declare` blocks with `EXCLUDE_FROM_ALL`, ensuring unused subproject targets (RPC, websockets, JSON, HTTP) are skipped during builds.
