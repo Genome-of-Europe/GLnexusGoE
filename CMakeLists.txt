@@ -6,6 +6,9 @@ cmake_minimum_required(VERSION 3.20)
 if(POLICY CMP0135)
   cmake_policy(SET CMP0135 NEW)
 endif()
+if(POLICY CMP0169)
+  cmake_policy(SET CMP0169 OLD)
+endif()
 
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release CACHE STRING
@@ -84,6 +87,7 @@ target_include_directories(libfcmm INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/third_p
 # 4. External Dependencies (Downloaded & Built)
 # ==============================================================================
 include(ExternalProject)
+include(FetchContent)
 
 # htslib
 ExternalProject_Add(htslib
@@ -113,7 +117,7 @@ ExternalProject_Add(rocksdb
     PREFIX ${CMAKE_CURRENT_BINARY_DIR}/external
     CONFIGURE_COMMAND ""
     BUILD_IN_SOURCE 1
-    BUILD_COMMAND bash -c "export PORTABLE=1 && export DISABLE_JEMALLOC=1 && export OPT='-DNDEBUG -O3 ${ROCKSDB_ARCH_OPT} -DROCKSDB_NO_DYNAMIC_EXTENSION' && export EXTRA_CXXFLAGS='-include cstdint -Wno-error ${ROCKSDB_EXTRA_CXXFLAGS}' && export EXTRA_LDFLAGS='${ROCKSDB_EXTRA_LDFLAGS}' && make -n static_lib && make -j$(nproc) static_lib"
+    BUILD_COMMAND bash -c "export PORTABLE=1 && export DISABLE_JEMALLOC=1 && export OPT='-DNDEBUG -O3 ${ROCKSDB_ARCH_OPT} -DROCKSDB_NO_DYNAMIC_EXTENSION' && export EXTRA_CXXFLAGS='-include cstdint -Wno-error ${ROCKSDB_EXTRA_CXXFLAGS}' && export EXTRA_LDFLAGS='${ROCKSDB_EXTRA_LDFLAGS}' && make -n static_lib && make -j${NUM_CORES} static_lib"
     INSTALL_COMMAND ""
     LOG_DOWNLOAD ON
     LOG_BUILD ON
@@ -127,41 +131,34 @@ set_target_properties(librocksdb PROPERTIES
     IMPORTED_LOCATION ${LIBROCKSDB_A}
     INTERFACE_INCLUDE_DIRECTORIES "${ROCKSDB_INCLUDE_DIR}")
 
-# yaml-cpp
-ExternalProject_Add(yaml-cpp
-    URL https://github.com/jbeder/yaml-cpp/archive/0.8.0.tar.gz
-    PREFIX ${CMAKE_CURRENT_BINARY_DIR}/external
-    CONFIGURE_COMMAND cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DYAML_CPP_BUILD_TESTS=OFF -DYAML_CPP_BUILD_TOOLS=OFF -DYAML_CPP_BUILD_CONTRIB=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS=${ARCH_FLAGS} .
-    BUILD_IN_SOURCE 1
-    BUILD_COMMAND bash -c "make -j$(nproc)"
-    INSTALL_COMMAND ""
-    LOG_DOWNLOAD ON
-    LOG_BUILD ON
-  )
-ExternalProject_Get_Property(yaml-cpp source_dir)
-set(YAML_CPP_INCLUDE_DIR ${source_dir}/include)
-ExternalProject_Get_Property(yaml-cpp binary_dir)
-add_library(libyaml-cpp STATIC IMPORTED)
-set(LIBYAML_CPP_A ${binary_dir}/libyaml-cpp.a)
-set_target_properties(libyaml-cpp PROPERTIES
-    IMPORTED_LOCATION ${LIBYAML_CPP_A}
-    INTERFACE_INCLUDE_DIRECTORIES "${YAML_CPP_INCLUDE_DIR}")
 
-# spdlog
-ExternalProject_Add(spdlog
+# yaml-cpp
+set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
+set(YAML_CPP_BUILD_TESTS OFF CACHE INTERNAL "")
+set(YAML_CPP_BUILD_TOOLS OFF CACHE INTERNAL "")
+set(YAML_CPP_BUILD_CONTRIB OFF CACHE INTERNAL "")
+set(YAML_BUILD_SHARED_LIBS OFF CACHE INTERNAL "")
+FetchContent_Declare(
+    yaml-cpp
+    URL https://github.com/jbeder/yaml-cpp/archive/0.8.0.tar.gz
+    URL_HASH SHA256=fbe74bbdcee21d656715688706da3c8becfd946d92cd44705cc6098bb23b3a16
+)
+FetchContent_MakeAvailable(yaml-cpp)
+add_library(libyaml-cpp ALIAS yaml-cpp)
+
+# spdlog (header-only)
+FetchContent_Declare(
+    spdlog
     URL https://github.com/gabime/spdlog/archive/v1.15.1.tar.gz
-    PREFIX ${CMAKE_CURRENT_BINARY_DIR}/external
-    CONFIGURE_COMMAND ""
+    URL_HASH SHA256=25c843860f039a1600f232c6eb9e01e6627f7d030a2ae5e232bdd3c9205d26cc
     PATCH_COMMAND sed -i.bak -e "s|str(S())|str(S{})|g" -e "s|string_view(S())|string_view(S{})|g" include/spdlog/fmt/bundled/base.h
-    BUILD_IN_SOURCE 1
-    BUILD_COMMAND ""
-    INSTALL_COMMAND ""
-    LOG_DOWNLOAD ON
-  )
-ExternalProject_Get_Property(spdlog source_dir)
+)
+FetchContent_GetProperties(spdlog)
+if(NOT spdlog_POPULATED)
+  FetchContent_Populate(spdlog)
+endif()
 add_library(libspdlog INTERFACE)
-add_dependencies(libspdlog spdlog)
-target_include_directories(libspdlog INTERFACE ${source_dir}/include)
+target_include_directories(libspdlog INTERFACE ${spdlog_SOURCE_DIR}/include)
 
 # capnproto
 ExternalProject_Add(capnp
@@ -176,7 +173,7 @@ ExternalProject_Add(capnp
 
 option(BUILD_DEPS_ONLY "Only fetch and build external dependencies" OFF)
 if(BUILD_DEPS_ONLY)
-  add_custom_target(dependencies ALL DEPENDS htslib rocksdb yaml-cpp spdlog capnp)
+  add_custom_target(dependencies ALL DEPENDS htslib rocksdb capnp)
   return()
 endif()
 
@@ -240,14 +237,14 @@ target_include_directories(glnexus
     capnp/serialize
     ${CMAKE_BINARY_DIR}/external/include
 )
-add_dependencies(glnexus htslib rocksdb yaml-cpp capnp)
+add_dependencies(glnexus htslib rocksdb capnp)
 add_library(libglnexus ALIAS glnexus)
 
 if(APPLE)
-  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -pthread -Wl,-U,_mallctl")
+  target_link_options(glnexus INTERFACE -pthread -Wl,-U,_mallctl)
   set(EXTERNAL_DEPS libhts librocksdb libyaml-cpp libctpl libfcmm libspdlog z snappy bz2 zstd lzma lz4 libcapnp.a libkj.a)
 else()
-  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${ARCH_FLAGS} -static-libstdc++ -pthread")
+  target_link_options(glnexus INTERFACE ${ARCH_FLAGS} -static-libstdc++ -pthread)
   set(EXTERNAL_DEPS libhts librocksdb libyaml-cpp libctpl libfcmm libspdlog libz.a libsnappy.a libbz2.a libzstd.a liblzma.a librt.a libcapnp.a libkj.a m)
 endif()
 target_link_libraries(glnexus PUBLIC ${EXTERNAL_DEPS})

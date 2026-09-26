@@ -191,3 +191,17 @@ Summary of changes made to compile GLnexus and pass unit tests natively on macOS
   * **Eliminated Global Compiler Flags**: Removed global `CMAKE_CXX_FLAGS` mutations and applied flags directly to `glnexus` via `target_compile_definitions` (`GIT_REVISION`) and `target_compile_options` (`-Wall`, `-pthread`, `-Werror=...`, `-fdiagnostics-color=auto`, `${ARCH_FLAGS}`, `$<$<CXX_COMPILER_ID:GNU>:-Wno-terminate>`, `$<$<CONFIG:Release>:-gdwarf>`), which are automatically inherited by downstream targets.
   * **Dynamic Homebrew Detection**: Replaced hardcoded `/opt/homebrew` paths with dynamic `brew --prefix` querying, supporting Apple Silicon, Intel Macs, and custom `CMAKE_PREFIX_PATH`.
   * **Testing Opt-Out (`BUILD_TESTING`)**: Wrapped the entire testing section in `if(BUILD_TESTING)` (standard CTest toggle) to enable opting out of test builds via `-DBUILD_TESTING=OFF`.
+
+---
+
+## 13. Modernize Dependencies to FetchContent & Target Linker Options
+
+* **FetchContent Migration (`yaml-cpp` & `spdlog`)**:
+  * **`yaml-cpp`**: Replaced `ExternalProject_Add` with CMake-native `FetchContent_Declare` (with SHA-256 verification) and `FetchContent_MakeAvailable(yaml-cpp)`. Aliased target to `libyaml-cpp`, integrating directly into the CMake build graph and eliminating custom subproject makefile invocations.
+  * **`spdlog`**: Migrated from `ExternalProject_Add` to `FetchContent_Declare` (with SHA-256 verification and in-flight `{fmt}` macro compatibility patch). Configured as a header-only `INTERFACE` target at configure time, eliminating unnecessary compilation and custom stamp files.
+* **Target-Based Linker Options**:
+  * Eliminated legacy global `CMAKE_EXE_LINKER_FLAGS` mutations.
+  * Scoped interface linker options directly to `glnexus` via `target_link_options(glnexus INTERFACE ...)`, which automatically propagate to downstream executables (`glnexus_cli` and `unit_tests`).
+* **Platform Concurrency & Build Hygiene**:
+  * Replaced remnant `make -j$(nproc)` in `rocksdb` build command with portable `-j${NUM_CORES}`.
+  * Streamlined `dependencies` and `add_dependencies(glnexus ...)` targets by removing native CMake targets now tracked automatically by the build graph.
