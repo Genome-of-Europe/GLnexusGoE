@@ -6,22 +6,25 @@ set -e -o pipefail
 echo "--- testing jemalloc warnings"
 
 HERE=$(dirname "$0")
+# glnexus_cli to test: ctest passes the built target (out-of-source builds); default is the
+# in-source location
+GLNEXUS_CLI="${1:-$HERE/../glnexus_cli}"
 LIBJEMALLOC_SO=$(ldconfig -p | grep "libjemalloc.so " | cut -f2 -d '>' | tr -d ' ')
 echo "path to libjemalloc.so: $LIBJEMALLOC_SO"
 unset LD_PRELOAD
 
 exit_code=0
-MALLOC_CONF=bogus:true LD_PRELOAD=$LIBJEMALLOC_SO $HERE/../glnexus_cli -h 2>&1 | grep 'Invalid conf pair' || exit_code=$?
+MALLOC_CONF=bogus:true LD_PRELOAD=$LIBJEMALLOC_SO $GLNEXUS_CLI -h 2>&1 | grep 'Invalid conf pair' || exit_code=$?
 if [ "$exit_code" -ne 0 ]; then
     echo "couldn't confirm jemalloc dynamic linking"
     exit 1
 fi
-$HERE/../glnexus_cli -h 2>&1 | grep 'jemalloc absent' || exit_code=$?
+$GLNEXUS_CLI -h 2>&1 | grep 'jemalloc absent' || exit_code=$?
 if [ "$exit_code" -ne 0 ]; then
     echo "false-negative jemalloc warning"
     exit 1
 fi
-LD_PRELOAD=$LIBJEMALLOC_SO $HERE/../glnexus_cli -h 2>&1 | grep 'jemalloc absent' || exit_code=$?
+LD_PRELOAD=$LIBJEMALLOC_SO $GLNEXUS_CLI -h 2>&1 | grep 'jemalloc absent' || exit_code=$?
 if [ "$exit_code" -eq 0 ]; then
     echo "false-positive jemalloc warning"
     exit 1

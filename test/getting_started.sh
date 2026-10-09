@@ -8,6 +8,9 @@ echo "--- testing Getting Started examples"
 free -h
 
 HERE=$(dirname "$0")
+# glnexus_cli to test: ctest passes the built target (out-of-source builds); default is the
+# in-source location
+GLNEXUS_CLI="${1:-$HERE/../glnexus_cli}"
 
 if [ ! -f /tmp/dv_1000G_ALDH2_gvcf.tar ]; then
     wget -nv -O /tmp/dv_1000G_ALDH2_gvcf.tar https://raw.githubusercontent.com/wiki/dnanexus-rnd/GLnexus/data/dv_1000G_ALDH2_gvcf.tar
@@ -25,7 +28,7 @@ if [ -z "${LD_PRELOAD:-}" ]; then
     done
 fi
 echo -e "chr12\t111760000\t111820000" > /tmp/dv_1000G_ALDH2_gvcf/ALDH2.bed
-time $HERE/../glnexus_cli --config DeepVariant --squeeze --bed /tmp/dv_1000G_ALDH2_gvcf/ALDH2.bed --mem-gbytes 1 --threads ${THREADS:-4} \
+time $GLNEXUS_CLI --config DeepVariant --squeeze --bed /tmp/dv_1000G_ALDH2_gvcf/ALDH2.bed --mem-gbytes 1 --threads ${THREADS:-4} \
     /tmp/dv_1000G_ALDH2_gvcf/*.g.vcf.gz | bcftools view | pv -Wni 10 -s 84968191 > /tmp/dv_1000G_ALDH2_gvcf/dv_1000G_ALDH2.vcf
 
 echo "--- Getting Started examples OK"

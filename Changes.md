@@ -214,6 +214,7 @@ Summary of changes made to compile GLnexus and pass unit tests natively on macOS
   * **Directory Validation Fix**: Added `file(MAKE_DIRECTORY ...)` for imported target include paths (`htslib`, `rocksdb`) so CMake's generation step does not fail before external tarballs are extracted.
   * **Build Tree Isolation**: Added `build/` and `cmake-build-*/` to `.gitignore` to support default IDE and out-of-source build directories while keeping the repository root clean.
   * **Test Working Directory Fix**: Configured CTest `unit_tests` with `WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"` and `$<TARGET_FILE:unit_tests>` so fixture data in `test/data/` resolves properly across out-of-source builds.
+  * **Test Script Binary Path Fix**: `test/jemalloc_linking.sh` and `test/getting_started.sh` hard-coded the binary as `test/../glnexus_cli`, which exists only in in-source builds, so both failed in `cmake -B build` builds. They now take the binary path as their first argument, CTest passes `$<TARGET_FILE:glnexus_cli>`, and the old location remains the default.
 
 * **Cap'n Proto 1.0.2 Upgrade & Modern CMake Integration**:
   * **FetchContent Migration**: Migrated from legacy `ExternalProject_Add` (Cap'n Proto 0.7.0 with custom `./configure && make`) to `FetchContent_Declare` with Cap'n Proto 1.0.2 and SHA-256 verification.
