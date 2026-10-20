@@ -1,49 +1,70 @@
-# Stage 1: Pre-build & cache external C++ dependencies
-FROM ubuntu:24.04 AS dependencies
+# ==============================================================================
+# Stage 1: glnexus-builder
+# Reusable x86_64 Rocky Linux 9 development environment for volume-mounted workflows:
+#   docker build --platform linux/amd64 --target glnexus-builder -t glnexus-builder .
+#   docker run --platform linux/amd64 -it --rm \
+#     -v $(pwd):/src \
+#     -v glnexus-build:/build \
+#     -v ccache:/root/.ccache \
+#     glnexus-builder
+# Inside container:
+#   cmake -S /src -B /build -DCMAKE_BUILD_TYPE=Release
+#   cmake --build /build -j$(nproc)
+#   ctest --test-dir /build -V
+# Clean rebuild (reset build volume):
+#   docker volume rm glnexus-build
+# ==============================================================================
+FROM rockylinux:9 AS glnexus-builder
+ENV LC_ALL=C.UTF-8
+ENV LANG=C.UTF-8
+
+RUN dnf install -y epel-release 'dnf-command(config-manager)' && \
+    dnf config-manager --set-enabled crb && \
+    dnf install -y --allowerasing \
+        gcc-toolset-13-gcc gcc-toolset-13-gcc-c++ \
+        cmake autoconf make file curl wget git-core \
+        ccache \
+        python3-pip \
+        libdeflate-devel snappy-devel zlib-devel libzstd-devel jemalloc-devel \
+        bcftools pv which tar bzip2 diffutils htslib-tools && \
+    pip3 install --no-cache-dir PyVCF3 && \
+    dnf clean all
+
+ENV PATH="/opt/rh/gcc-toolset-13/root/usr/bin:${PATH}"
+
+# Compiler cache config
+ENV CCACHE_DIR=/root/.ccache
+ENV CMAKE_C_COMPILER_LAUNCHER=ccache
+ENV CMAKE_CXX_COMPILER_LAUNCHER=ccache
+
+# Multi-arch jemalloc preload
+RUN ln -sf /usr/lib64/libjemalloc.so.2 /usr/local/lib/libjemalloc.so.2 2>/dev/null || true
+ENV LD_PRELOAD=/usr/local/lib/libjemalloc.so.2
+
+# Explicit mount directories for volume workflow
+RUN mkdir -p /src /build /root/.ccache
+WORKDIR /src
+CMD ["/bin/bash"]
+
+# ==============================================================================
+# Stage 2: Slim runtime image for deployment & Apptainer
+# ==============================================================================
+FROM rockylinux:9-minimal AS runtime
 LABEL maintainer="DNAnexus"
 ENV LC_ALL=C.UTF-8
 ENV LANG=C.UTF-8
-ENV DEBIAN_FRONTEND=noninteractive
-ARG build_type=Release
 
-RUN apt-get -qq update && \
-    apt-get -qq install -y --no-install-recommends --no-install-suggests \
-    curl wget ca-certificates git-core less netbase \
-    g++ cmake autoconf make file \
-    libjemalloc-dev libzip-dev libsnappy-dev zlib1g-dev libzstd-dev libdeflate-dev \
-    python3-vcf bcftools pv
+RUN microdnf install -y epel-release && \
+    microdnf install -y \
+        jemalloc bcftools pv htslib-tools \
+        libdeflate snappy libzstd zlib && \
+    microdnf clean all && \
+    rm -rf /var/cache/yum /var/cache/dnf
 
-WORKDIR /GLnexus
-
-# Copy only the dependency manifest
-COPY CMakeLists.txt /GLnexus/
-
-# Fetch, configure and compile all external dependencies (RocksDB, htslib, Cap'n Proto, yaml-cpp, spdlog)
-RUN cmake -DBUILD_DEPS_ONLY=ON -DCMAKE_BUILD_TYPE=$build_type . && make -j$(nproc) dependencies
-
-# Stage 2: Compile GLnexus application code & tests
-FROM dependencies AS builder
-RUN ln -s /usr/lib/*-linux-gnu/libjemalloc.so /usr/local/lib/libjemalloc.so.2 2>/dev/null || ln -s /usr/lib/*-linux-gnu/libjemalloc.so.2 /usr/local/lib/libjemalloc.so.2
-ENV LD_PRELOAD=/usr/local/lib/libjemalloc.so.2
-COPY . /GLnexus
-RUN cmake -DBUILD_DEPS_ONLY=OFF -DCMAKE_BUILD_TYPE=$build_type . && make -j$(nproc)
-CMD ["ctest", "-V"]
-
-# Stage 3: Slim runtime image
-FROM ubuntu:24.04
-ENV LC_ALL=C.UTF-8
-ENV LANG=C.UTF-8
-ENV DEBIAN_FRONTEND=noninteractive
-
-RUN apt-get -qq update && \
-    apt-get -qq install -y --no-install-recommends \
-    libjemalloc2 bcftools tabix pv && \
-    rm -rf /var/lib/apt/lists/*
-
-# Multi-arch LD_PRELOAD support (resolves x86_64 and aarch64 paths)
-RUN ln -s /usr/lib/*-linux-gnu/libjemalloc.so.2 /usr/local/lib/libjemalloc.so.2
+RUN ln -sf /usr/lib64/libjemalloc.so.2 /usr/local/lib/libjemalloc.so.2 2>/dev/null || true
 ENV LD_PRELOAD=/usr/local/lib/libjemalloc.so.2
 
-COPY --from=builder /GLnexus/glnexus_cli /usr/local/bin/
+COPY glnexus_cli /usr/local/bin/glnexus_cli
 
-CMD ["glnexus_cli"]
+ENTRYPOINT ["/usr/local/bin/glnexus_cli"]
+CMD ["--help"]

@@ -63,3 +63,8 @@ lz4-r131.tar
 compile_commands.json
 GLnexus.DB/
 GLnexus.code-workspace
+
+# Containers & archives
+*.sif
+*.tar
+

@@ -193,7 +193,7 @@ FetchContent_Declare(
     EXCLUDE_FROM_ALL
 )
 FetchContent_MakeAvailable(CapnProto)
-set(BUILD_TESTING ON CACHE BOOL "Build the testing tree" FORCE)
+unset(BUILD_TESTING)
 
 option(BUILD_DEPS_ONLY "Only fetch and build external dependencies" OFF)
 if(BUILD_DEPS_ONLY)
@@ -258,6 +258,8 @@ target_include_directories(glnexus
 add_dependencies(glnexus htslib rocksdb)
 add_library(libglnexus ALIAS glnexus)
 
+option(STATIC_LIBDEPS "Link dependencies statically on Linux" OFF)
+
 if(APPLE)
   target_link_options(glnexus INTERFACE -pthread -Wl,-U,_mallctl $<$<BOOL:${BREW_PREFIX}>:-L${BREW_PREFIX}/lib>)
   set(EXTERNAL_DEPS
@@ -265,9 +267,14 @@ if(APPLE)
       z deflate snappy zstd lz4 CapnProto::capnp)
 else()
   target_link_options(glnexus INTERFACE ${ARCH_FLAGS} -static-libstdc++ -pthread)
+  if(STATIC_LIBDEPS)
+    set(SYS_LIBS libz.a libdeflate.a libsnappy.a libzstd.a librt.a)
+  else()
+    set(SYS_LIBS z deflate snappy zstd rt)
+  endif()
   set(EXTERNAL_DEPS
       libhts librocksdb libyaml-cpp libctpl libfcmm libspdlog
-      libz.a libdeflate.a libsnappy.a libzstd.a librt.a CapnProto::capnp m)
+      ${SYS_LIBS} CapnProto::capnp m ${CMAKE_DL_LIBS})
 endif()
 target_link_libraries(glnexus PUBLIC ${EXTERNAL_DEPS})
 
@@ -315,7 +322,7 @@ if(BUILD_TESTING)
            WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
            COMMAND $<TARGET_FILE:unit_tests> -d yes)
   if(NOT APPLE)
-    add_test(NAME jemalloc_warning COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test/jemalloc_linking.sh)
-    add_test(NAME getting_started COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test/getting_started.sh)
+    add_test(NAME jemalloc_warning COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test/jemalloc_linking.sh $<TARGET_FILE:glnexus_cli>)
+    add_test(NAME getting_started COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test/getting_started.sh $<TARGET_FILE:glnexus_cli>)
   endif()
 endif()

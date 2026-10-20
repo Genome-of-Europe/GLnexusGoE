@@ -19,9 +19,11 @@
 // This file has utilities employed by the glnexus applet.
 using namespace std;
 
+#include <dlfcn.h>
+
 extern "C"
 {
-  // weak symbol: resolved at runtime by the linker if we are using jemalloc, nullptr otherwise
+  // weak symbol fallback
   int mallctl(const char *name, void *oldp, size_t *oldlenp, void *newp, size_t newlen) __attribute__((weak));
 }
 
@@ -30,9 +32,14 @@ namespace cli {
 namespace utils {
 
 bool detect_jemalloc(std::shared_ptr<spdlog::logger> logger) {
-    char *v = nullptr;
+    typedef int (*mallctl_t)(const char *, void *, size_t *, void *, size_t);
+    mallctl_t mallctl_fn = (mallctl_t)dlsym(RTLD_DEFAULT, "mallctl");
+    if (!mallctl_fn) {
+        mallctl_fn = mallctl;
+    }
+    const char *v = nullptr;
     size_t s = sizeof(v);
-    if (!mallctl || mallctl("version", &v, &s, nullptr, 0), !v) {
+    if (!mallctl_fn || mallctl_fn("version", &v, &s, nullptr, 0) != 0 || !v) {
         logger->warn("jemalloc absent, which will impede performance with high thread counts. See https://github.com/dnanexus-rnd/GLnexus/wiki/Performance");
         return false;
     }

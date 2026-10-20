@@ -10,11 +10,12 @@ CMakeCache.txt
 cmake_install.cmake
 Makefile
 unit_tests
-glnexus_cli
 libglnexus.a
 external/
 *.o
 *.a
 *.dylib
 *.so
+*.sif
+*.tar
 scratch/

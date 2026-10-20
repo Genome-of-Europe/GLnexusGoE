@@ -41,19 +41,19 @@ Summary of changes made to compile GLnexus and pass unit tests natively on macOS
 
 ## 2. Core Source Code (`src/`)
 
-* **[genotyper.cc](file:///Users/vinter/projects/GLnexus/src/genotyper.cc)**:
+* **[genotyper.cc](src/genotyper.cc)**:
   * Gated `__asm__(".symver logf,logf@GLIBC_2.2.5");` behind `#if defined(__linux__) && defined(__GLIBC__)`.
   * *Rationale*: Apple Mach-O assembler does not support GNU `.symver` directives.
 
-* **[cli_utils.cc](file:///Users/vinter/projects/GLnexus/src/cli_utils.cc)**:
+* **[cli_utils.cc](src/cli_utils.cc)**:
   * Changed `#include "crc32c.h"` to `#include "util/crc32c.h"`.
   * *Rationale*: Allows removal of `rocksdb/util` from the global header search path.
 
-* **[BCFKeyValueData_utils.h](file:///Users/vinter/projects/GLnexus/src/BCFKeyValueData_utils.h)**:
+* **[BCFKeyValueData_utils.h](src/BCFKeyValueData_utils.h)**:
   * Added endian conversion shims for macOS using `<libkern/OSByteOrder.h>` (`htobe64`, `be64toh`, `htobe32`, etc.).
   * *Rationale*: `<endian.h>` is a glibc/Linux header and does not exist on macOS.
 
-* **[BCFKeyValueData.cc](file:///Users/vinter/projects/GLnexus/src/BCFKeyValueData.cc)**:
+* **[BCFKeyValueData.cc](src/BCFKeyValueData.cc)**:
   * Removed obsolete `#include <endian.h>`.
   * Gated the word-alignment error check behind `#if !defined(__x86_64__) && !defined(__aarch64__) && !defined(__arm64__)`.
   * *Rationale*: ARM64 natively supports unaligned word memory access, and `capnp::UnalignedFlatArrayMessageReader` is explicitly designed for unaligned buffers.
@@ -62,7 +62,7 @@ Summary of changes made to compile GLnexus and pass unit tests natively on macOS
 
 ## 3. Unit Tests (`test/`)
 
-* **[BCFKeyValueData.cc](file:///Users/vinter/projects/GLnexus/test/BCFKeyValueData.cc)** & **[rocks_integration.cc](file:///Users/vinter/projects/GLnexus/test/rocks_integration.cc)**:
+* **[BCFKeyValueData.cc](test/BCFKeyValueData.cc)** & **[rocks_integration.cc](test/rocks_integration.cc)**:
   * Changed `make_pair<string, uint64_t>` to `make_pair<string, size_t>` in contig initializers.
   * *Rationale*: On Darwin LP64, `uint64_t` is `unsigned long long` while `size_t` is `unsigned long`. The type mismatch prevented implicit conversion in `std::vector<std::pair<std::string, size_t>>` constructors.
 
@@ -90,10 +90,10 @@ Summary of changes made to compile GLnexus and pass unit tests natively on macOS
   * *Rationale*: `bcf_hdr_fmt_text` is deprecated in htslib 1.24.
 
 * **Unit Tests & Test Data**:
-  * **[test/htslib_behaviors.cc](file:///Users/vinter/projects/GLnexus/test/htslib_behaviors.cc)**:
+  * **[test/htslib_behaviors.cc](test/htslib_behaviors.cc)**:
     * Wrapped `bcf_hdr_sync`, `bcf_hdr_write`, and `bcf_write1` calls in `REQUIRE(... == 0)` to satisfy `-Werror=unused-result`.
     * Included `<htslib/bgzf.h>` and set `fp->fp.bgzf->is_compressed = 0` for raw uncompressed BCF byte-comparison test.
-  * **[test/BCFKeyValueData.cc](file:///Users/vinter/projects/GLnexus/test/BCFKeyValueData.cc)**:
+  * **[test/BCFKeyValueData.cc](test/BCFKeyValueData.cc)**:
     * Used `std::max<hts_pos_t>` to fix template argument deduction against 64-bit `pos`.
   * **Test Data (`test/data/*.gvcf`, `test/data/mt/*.gvcf`)**:
     * Replaced spaces before `QUAL` in `#CHROM` line (`\t  QUAL` -> `\tQUAL`) in 14 test gVCF files. Modern htslib strictly enforces tab-separated headers.
@@ -146,12 +146,12 @@ Summary of changes made to compile GLnexus and pass unit tests natively on macOS
   * Replaced deprecated `python3-pyvcf` with Ubuntu 24.04 package `python3-vcf`.
 * **Multi-Arch (x86_64 & ARM64) and Modern Toolchain Fixes**:
   * **Jemalloc path**: Replaced hardcoded `/usr/lib/x86_64-linux-gnu/libjemalloc.so.2` with dynamic symlink `/usr/lib/*-linux-gnu/libjemalloc.so.2` to support both x86_64 and aarch64.
-  * **RocksDB GCC 13/14 compatibility**: Added `-include cstdint` to RocksDB's `EXTRA_CXXFLAGS` in [CMakeLists.txt](file:///Users/vinter/projects/GLnexus/CMakeLists.txt).
-  * **Glibc symbol versioning**: Gated `__asm__(".symver logf,logf@GLIBC_2.2.5");` in [src/genotyper.cc](file:///Users/vinter/projects/GLnexus/src/genotyper.cc) to `defined(__x86_64__)` (since `GLIBC_2.2.5` does not exist on ARM64).
-  * **Math library linkage**: Added `m` (`libm`) to `GLNEXUS_DEPS` on Linux in [CMakeLists.txt](file:///Users/vinter/projects/GLnexus/CMakeLists.txt).
-  * **Catch v1 glibc 2.34+ compatibility**: Added patch to [CMakeLists.txt](file:///Users/vinter/projects/GLnexus/CMakeLists.txt) replacing `altStackMem[SIGSTKSZ]` with fixed buffer size `[32768]` in `catch.hpp` (in glibc 2.34+, `SIGSTKSZ` is no longer an integral constant expression).
+  * **RocksDB GCC 13/14 compatibility**: Added `-include cstdint` to RocksDB's `EXTRA_CXXFLAGS` in [CMakeLists.txt](CMakeLists.txt).
+  * **Glibc symbol versioning**: Gated `__asm__(".symver logf,logf@GLIBC_2.2.5");` in [src/genotyper.cc](src/genotyper.cc) to `defined(__x86_64__)` (since `GLIBC_2.2.5` does not exist on ARM64).
+  * **Math library linkage**: Added `m` (`libm`) to `GLNEXUS_DEPS` on Linux in [CMakeLists.txt](CMakeLists.txt).
+  * **Catch v1 glibc 2.34+ compatibility**: Added patch to [CMakeLists.txt](CMakeLists.txt) replacing `altStackMem[SIGSTKSZ]` with fixed buffer size `[32768]` in `catch.hpp` (in glibc 2.34+, `SIGSTKSZ` is no longer an integral constant expression).
 * **Workspace Isolation**:
-  * Added [`.dockerignore`](file:///Users/vinter/projects/GLnexus/.dockerignore) to prevent local macOS caches and binaries from polluting container builds.
+  * Added [`.dockerignore`](.dockerignore) to prevent local macOS caches and binaries from polluting container builds.
 
 ---
 
@@ -186,7 +186,7 @@ Summary of changes made to compile GLnexus and pass unit tests natively on macOS
 ## 12. Restructure CMakeLists.txt into 8 Target-Based Sections
 
 * **Visual Architecture & Logical Sections**:
-  * Restructured [CMakeLists.txt](file:///Users/vinter/projects/GLnexus/CMakeLists.txt) into 8 clearly defined, logically ordered blocks.
+  * Restructured [CMakeLists.txt](CMakeLists.txt) into 8 clearly defined, logically ordered blocks.
 * **Modern Target-Based Property Migration**:
   * **Eliminated Global Compiler Flags**: Removed global `CMAKE_CXX_FLAGS` mutations and applied flags directly to `glnexus` via `target_compile_definitions` (`GIT_REVISION`) and `target_compile_options` (`-Wall`, `-pthread`, `-Werror=...`, `-fdiagnostics-color=auto`, `${ARCH_FLAGS}`, `$<$<CXX_COMPILER_ID:GNU>:-Wno-terminate>`, `$<$<CONFIG:Release>:-gdwarf>`), which are automatically inherited by downstream targets.
   * **Dynamic Homebrew Detection**: Replaced hardcoded `/opt/homebrew` paths with dynamic `brew --prefix` querying, supporting Apple Silicon, Intel Macs, and custom `CMAKE_PREFIX_PATH`.
@@ -259,9 +259,37 @@ Summary of changes made to compile GLnexus and pass unit tests natively on macOS
   * **Target Separation & Cleanliness**: Moved `test/utils.cc` out of production `libglnexus.a` into `unit_tests`; removed redundant compilation of `src/diploid.cc` in `unit_tests`.
   * **Ghost Include Cleanup**: Removed non-existent `src/rocksdb/include` from `target_include_directories(glnexus PRIVATE ...)`.
   * **Docker & Multi-Arch Container Modernization**:
-    * Updated [Dockerfile](file:///Users/vinter/projects/GLnexus/Dockerfile) to replace `libbz2-dev` and `liblzma-dev` with `libdeflate-dev`.
+    * Updated [Dockerfile](Dockerfile) to replace `libbz2-dev` and `liblzma-dev` with `libdeflate-dev`.
     * Configured multi-arch `LD_PRELOAD` resolution for `libjemalloc.so.2` in the `builder` stage so CTest/Catch2 test execution runs with jemalloc active.
-    * Added `cmake-build-*/` and `_deps/` to [`.dockerignore`](file:///Users/vinter/projects/GLnexus/.dockerignore), reducing build context transfer from 3.7GB down to 9.6KB.
-    * Modernized [test/getting_started.sh](file:///Users/vinter/projects/GLnexus/test/getting_started.sh) to dynamically locate `libjemalloc` across architectures (`x86_64` and `aarch64`) and accept thread budgets (`${THREADS:-4}`) to avoid OOM killing during multi-thousand-sample genotyping in resource-constrained environments. All tests (`unit_tests`, `jemalloc_linking`, `getting_started`) verified passing 100% inside container.
+    * Added `cmake-build-*/` and `_deps/` to [`.dockerignore`](.dockerignore), reducing build context transfer from 3.7GB down to 9.6KB.
+    * Modernized [test/getting_started.sh](test/getting_started.sh) to dynamically locate `libjemalloc` across architectures (`x86_64` and `aarch64`) and accept thread budgets (`${THREADS:-4}`) to avoid OOM killing during multi-thousand-sample genotyping in resource-constrained environments. All tests (`unit_tests`, `jemalloc_linking`, `getting_started`) verified passing 100% inside container.
+
+---
+
+## 16. Rocky Linux 9 Compatibility, Test Suite Fixes & Apptainer Workflow
+
+* **Rocky Linux 9 & 2-Stage Container Architecture**:
+  * Migrated [Dockerfile](Dockerfile) from Ubuntu to `rockylinux:9` (glibc 2.34) using `gcc-toolset-13` for C++23 compilation.
+  * Split into two clean stages: `glnexus-builder` (dev environment with `ccache`, `python3-pip`, and `PyVCF3`) and `runtime` (`rockylinux:9-minimal` slim deployment image).
+  * Allowed `glnexus_cli` in [`.dockerignore`](.dockerignore) and ignored `*.sif` and `*.tar`.
+
+* **Dynamic Linking on Linux (`STATIC_LIBDEPS=OFF`)**:
+  * Added `option(STATIC_LIBDEPS "Link dependencies statically on Linux" OFF)` in [CMakeLists.txt](CMakeLists.txt).
+  * Links system shared libraries (`z`, `deflate`, `snappy`, `zstd`, `rt`, `${CMAKE_DL_LIBS}`) by default, resolving missing `.a` static archives on RHEL/Rocky 9.
+
+* **Jemalloc Detection via `dlsym`**:
+  * Updated `detect_jemalloc` in [src/cli_utils.cc](src/cli_utils.cc) to query `dlsym(RTLD_DEFAULT, "mallctl")` directly. Resolves false-negative warnings when `LD_PRELOAD` is used on modern ELF linkers.
+
+* **CTest & Test Scripts Simplification**:
+  * Fixed `BUILD_TESTING` variable shadowing in [CMakeLists.txt](CMakeLists.txt) by unsetting the local override after CapnProto.
+  * Passed `$<TARGET_FILE:glnexus_cli>` explicitly to `jemalloc_warning` and `getting_started` CTest targets.
+  * Simplified binary resolution in [test/getting_started.sh](test/getting_started.sh) and [test/jemalloc_linking.sh](test/jemalloc_linking.sh) to `"${1:-./glnexus_cli}"` and expanded library search paths for `libjemalloc.so.2`. All tests passing 100%.
+
+* **Docker & Apptainer CLI (`docker.sh`)**:
+  * Added [docker.sh](docker.sh) to orchestrate `builder`, `dev`, `compile`, `test`, `extract`, `runtime`, and `apptainer`/`sif` builds.
+  * Synchronized version tagging with `git describe --tags --always --dirty`.
+  * Generates standalone ~200MB HPC Apptainer SIF images directly on macOS or Linux (`./docker.sh sif`).
+
+
 
 
